@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Trading Assistant</title>
+
+  <!-- Bootstrap 5 (CDN – works offline once cached) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="/css/style.css?v=4"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════ HEADER ══ -->
+<header class="app-header">
+  <div class="container-fluid px-4">
+    <div class="row align-items-center py-3">
+
+      <!-- Logo + Title -->
+      <div class="col-lg-5 col-md-6">
+        <div class="d-flex align-items-center gap-3">
+          <div class="logo-circle">📈</div>
+          <div>
+            <h1 class="app-title mb-0">AI Trading Assistant</h1>
+            <p class="app-subtitle mb-0">Smart signals. Simple advice. Safe investing.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market Status -->
+      <div class="col-lg-3 col-md-6 mt-2 mt-md-0">
+        <div id="market-status" class="market-badges d-flex gap-2 flex-wrap">
+          <span class="badge-market" id="badge-in">🇮🇳 India —</span>
+        </div>
+        <div class="last-updated mt-1" id="last-updated-text">Fetching data…</div>
+      </div>
+
+      <!-- Controls -->
+      <div class="col-lg-4 col-md-12 mt-2 mt-lg-0">
+        <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+          <!-- Refresh button -->
+          <button class="btn-action btn-refresh" onclick="refreshCurrentTab()" id="refresh-btn">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+          <!-- Excel export -->
+          <button class="btn-action btn-excel" onclick="exportExcel()">
+            <i class="bi bi-file-earmark-excel-fill"></i> Export Excel
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════ DISCLAIMER ══ -->
+<div class="disclaimer-bar">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>Important:</strong> This tool is for educational purposes only.
+  Trading involves risk and you may lose money.
+  Always consult a financial advisor before investing real money.
+</div>
+
+<!-- ══════════════════════════════════════════════ AUTO-REFRESH BAR ══ -->
+<div class="refresh-bar" id="refresh-bar">
+  <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">300</strong>s</span>
+  <div class="refresh-progress-outer">
+    <div class="refresh-progress-inner" id="refresh-progress"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ TAB NAV ══ -->
+<div class="tab-nav-wrapper">
+  <div class="container-fluid px-3 px-md-4">
+    <div class="main-tab-nav" id="main-tab-nav">
+      <button class="main-tab-btn active" id="tab-btn-intraday" onclick="switchTab('intraday')">
+        <i class="bi bi-bar-chart-line-fill"></i> Intraday
+      </button>
+      <button class="main-tab-btn" id="tab-btn-options" onclick="switchTab('options')">
+        <i class="bi bi-layers-fill"></i> Options
+      </button>
+      <button class="main-tab-btn" id="tab-btn-wishlist" onclick="switchTab('wishlist')">
+        <i class="bi bi-heart-fill"></i> Wishlist
+        <span class="tab-badge" id="wishlist-tab-count">0</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ GLOBAL SEARCH BAR ══ -->
+<div class="global-search-bar">
+  <div class="container-fluid px-3 px-md-4">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <span class="global-search-label">
+        <i class="bi bi-plus-circle-fill me-1"></i>Add to Watchlist:
+      </span>
+      <div class="wishlist-input-wrap">
+        <input type="text" id="wishlist-input"
+               class="wishlist-input"
+               placeholder="Symbol or name e.g. INFY or Infosys"
+               oninput="onSearchInput()"
+               onkeydown="handleSearchKey(event)"
+               autocomplete="off" />
+        <div id="search-suggestions" class="search-suggestions d-none"></div>
+      </div>
+      <button class="btn-wish-add" onclick="addToWishlistManual()">
+        Add
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ MAIN CONTENT ══ -->
+<main class="container-fluid px-3 px-md-4 mt-3">
+
+  <!-- ════════════════════════════ TAB: INTRADAY ════════════════════════════ -->
+  <div id="tab-intraday" class="tab-panel">
+
+    <!-- Loading spinner -->
+    <div id="loading-section" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
+      <p class="mt-3 fs-5 text-muted">Fetching live stock data and analysing signals…<br>
+        <small>This may take 20–30 seconds on first load.</small>
+      </p>
+    </div>
+
+    <!-- Error section -->
+    <div id="error-section" class="d-none">
+      <div class="alert alert-danger d-flex align-items-center gap-3 fs-5">
+        <i class="bi bi-wifi-off fs-3"></i>
+        <div>
+          <strong>Could not load data.</strong><br>
+          Please check your internet connection and click
+          <button class="btn btn-sm btn-danger ms-2" onclick="loadStocks(true)">Retry</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div id="summary-row" class="d-none">
+      <div class="row g-3 mb-4" id="summary-cards"></div>
+    </div>
+
+    <!-- Stock grid -->
+    <div id="stocks-section" class="d-none">
+      <div class="section-header mb-3">
+        <h2 class="section-title">
+          <i class="bi bi-bar-chart-line-fill me-2"></i>
+          Indian Stock Signals
+          <span class="badge bg-secondary ms-2 fs-6" id="stock-count">0</span>
+        </h2>
+        <!-- Filter bar -->
+        <div class="filter-bar" id="filter-bar">
+          <button class="btn-filter active" onclick="filterStocks('ALL', this)">All</button>
+          <button class="btn-filter buy"    onclick="filterStocks('BUY', this)">🟢 Buy</button>
+          <button class="btn-filter hold"   onclick="filterStocks('HOLD', this)">🟡 Hold</button>
+          <button class="btn-filter sell"   onclick="filterStocks('SELL', this)">🔴 Sell</button>
+        </div>
+      </div>
+      <div class="row g-3" id="stock-grid"></div>
+    </div>
+
+    <!-- News section -->
+    <div class="section-header mt-4 mb-3">
+      <h2 class="section-title"><i class="bi bi-newspaper me-2"></i>Market News</h2>
+    </div>
+    <div id="news-loading" class="text-muted">Loading news…</div>
+    <div id="news-grid" class="row g-3 mb-5"></div>
+
+  </div><!-- /tab-intraday -->
+
+
+  <!-- ════════════════════════════ TAB: OPTIONS ════════════════════════════ -->
+  <div id="tab-options" class="tab-panel d-none">
+
+    <!-- Instrument selector -->
+    <div class="options-toolbar mb-4">
+      <h2 class="section-title mb-3">
+        <i class="bi bi-layers-fill me-2"></i>Options Chain Analysis
+      </h2>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="fw-semibold me-1">Select Instrument:</span>
+        <button class="btn-instrument active" id="inst-NIFTY"     onclick="loadOptions('NIFTY')">Nifty 50</button>
+        <button class="btn-instrument"        id="inst-BANKNIFTY" onclick="loadOptions('BANKNIFTY')">Bank Nifty</button>
+        <button class="btn-instrument"        id="inst-RELIANCE"  onclick="loadOptions('RELIANCE')">Reliance</button>
+        <button class="btn-instrument"        id="inst-TCS"       onclick="loadOptions('TCS')">TCS</button>
+        <button class="btn-instrument"        id="inst-INFY"      onclick="loadOptions('INFY')">Infosys</button>
+        <button class="btn-instrument"        id="inst-HDFCBANK"  onclick="loadOptions('HDFCBANK')">HDFC Bank</button>
+        <button class="btn-instrument"        id="inst-ICICIBANK" onclick="loadOptions('ICICIBANK')">ICICI Bank</button>
+      </div>
+    </div>
+
+    <!-- Options loading -->
+    <div id="options-loading" class="text-center py-5 d-none">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
+      <p class="mt-3 fs-5 text-muted">Fetching option chain data…</p>
+    </div>
+
+    <!-- Options error -->
+    <div id="options-error" class="d-none">
+      <div class="alert alert-danger d-flex align-items-center gap-3 fs-5">
+        <i class="bi bi-wifi-off fs-3"></i>
+        <div>
+          <strong>Could not load options data.</strong><br>
+          Please check your internet connection and try again.
+        </div>
+      </div>
+    </div>
+
+    <!-- Options result -->
+    <div id="options-result" class="d-none">
+
+      <!-- Signal banner -->
+      <div class="options-signal-banner mb-4" id="options-signal-banner">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div>
+            <div class="options-instrument-name" id="options-instrument-name"></div>
+            <div class="options-spot-price" id="options-spot-price"></div>
+          </div>
+          <div class="ms-auto text-end">
+            <div class="options-signal-label" id="options-signal-label"></div>
+            <div class="options-expiry" id="options-expiry"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Explanation -->
+      <div class="explanation-box mb-4">
+        <h5><i class="bi bi-robot me-2"></i>What the AI says</h5>
+        <p id="options-explanation" class="fs-5 mb-0"></p>
+      </div>
+
+      <!-- Key metrics cards -->
+      <div class="row g-3 mb-4" id="options-metrics"></div>
+
+      <!-- Reasons list -->
+      <div class="mb-4">
+        <h5><i class="bi bi-list-check me-2"></i>Why this signal?</h5>
+        <ul class="reasons-list" id="options-reasons"></ul>
+      </div>
+
+      <!-- Option chain table -->
+      <div class="chain-table-wrapper mb-5">
+        <h5><i class="bi bi-table me-2"></i>Option Chain
+          <span class="badge bg-secondary ms-2 fs-6" id="options-chain-label"></span>
+        </h5>
+        <div class="table-responsive">
+          <table class="table options-table" id="options-chain-table">
+            <thead>
+              <tr>
+                <th class="call-col">CALL OI</th>
+                <th class="call-col">CALL LTP</th>
+                <th class="call-col">CALL IV %</th>
+                <th class="strike-col">STRIKE</th>
+                <th class="put-col">PUT IV %</th>
+                <th class="put-col">PUT LTP</th>
+                <th class="put-col">PUT OI</th>
+              </tr>
+            </thead>
+            <tbody id="options-chain-body"></tbody>
+          </table>
+        </div>
+        <p class="text-muted small mt-2">
+          <i class="bi bi-info-circle me-1"></i>
+          ATM = At The Money (highlighted). OI = Open Interest. LTP = Last Traded Price. IV = Implied Volatility.
+        </p>
+      </div>
+
+    </div><!-- /options-result -->
+
+  </div><!-- /tab-options -->
+
+
+  <!-- ════════════════════════════ TAB: WISHLIST ════════════════════════════ -->
+  <div id="tab-wishlist" class="tab-panel d-none">
+
+    <div class="section-header mb-3">
+      <h2 class="section-title">
+        <i class="bi bi-heart-fill me-2 text-danger"></i>
+        My Wishlist
+        <span class="badge bg-danger ms-2 fs-6" id="wishlist-count">0</span>
+      </h2>
+    </div>
+
+    <!-- Empty state -->
+    <div id="wishlist-empty" class="wishlist-empty d-none">
+      <div class="wishlist-empty-icon">🤍</div>
+      <p class="wishlist-empty-text">Your wishlist is empty.</p>
+      <p class="text-muted">Click the <i class="bi bi-heart"></i> heart on any stock card in the Intraday tab,<br>
+         or type a symbol above to add stocks you want to watch.</p>
+    </div>
+
+    <!-- Wishlist loading -->
+    <div id="wishlist-loading" class="text-center py-3 d-none">
+      <div class="spinner-border spinner-border-sm text-danger me-2"></div>
+      <span class="text-muted">Fetching wishlist data…</span>
+    </div>
+
+    <!-- Wishlist cards -->
+    <div class="row g-3" id="wishlist-grid"></div>
+
+  </div><!-- /tab-wishlist -->
+
+</main>
+
+<!-- ══════════════════════════════════════════════ DETAIL MODAL ══ -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" id="modal-header">
+        <div>
+          <h3 class="modal-title mb-0" id="modal-title">Stock Detail</h3>
+          <small id="modal-subtitle" class="text-muted"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+
+        <!-- Signal banner -->
+        <div class="signal-banner mb-4" id="modal-signal-banner">
+          <div class="signal-label" id="modal-signal-label"></div>
+          <div class="signal-score" id="modal-signal-score"></div>
+        </div>
+
+        <!-- Explanation -->
+        <div class="explanation-box mb-4">
+          <h5><i class="bi bi-robot me-2"></i>What the AI says</h5>
+          <p id="modal-explanation" class="fs-5 mb-0"></p>
+        </div>
+
+        <!-- Key stats -->
+        <div class="row g-3 mb-4" id="modal-stats"></div>
+
+        <!-- Price chart -->
+        <div class="chart-container mb-4">
+          <h5><i class="bi bi-graph-up me-2"></i>Today's Price Movement</h5>
+          <canvas id="modal-chart" height="120"></canvas>
+          <p class="text-muted small mt-1" id="chart-note"></p>
+        </div>
+
+        <!-- Reasons -->
+        <div>
+          <h5><i class="bi bi-list-check me-2"></i>Why this signal?</h5>
+          <ul class="reasons-list" id="modal-reasons"></ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-muted small me-auto">
+          <i class="bi bi-info-circle me-1"></i>
+          Scores update every 5 minutes. Past signals do not guarantee future results.
+        </span>
+        <button type="button" class="btn btn-outline-danger" id="modal-wish-btn"
+                onclick="toggleWishlistFromModal()">
+          <i class="bi bi-heart" id="modal-wish-icon"></i>
+          <span id="modal-wish-label">Add to Wishlist</span>
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ FOOTER ══ -->
+<footer class="app-footer mt-5 py-3 text-center text-muted small">
+  AI Trading Assistant &nbsp;|&nbsp; Built with Python + FastAPI + Yahoo Finance
+  &nbsp;|&nbsp; Data refreshes every 5 minutes
+  &nbsp;|&nbsp; <strong>Not financial advice</strong>
+</footer>
+
+<!-- Global toast — lives outside tab panels so it shows from any tab -->
+<div id="wishlist-toast" class="wishlist-toast d-none"></div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js?v=4"></script>
+</body>
+</html>

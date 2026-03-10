@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile backend/app.py backend/data/stock_fetcher.py backend/agents/technical_agent.py backend/agents/sentiment_agent.py backend/agents/signal_agent.py backend/utils/excel_exporter.py run.py)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pip3 install -r requirements.txt -q)",
+      "Bash(python3 -c \"import uvicorn; print\\(''ok''\\)\")",
+      "Bash(python3 -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(lsof -ti :8000)",
+      "Bash(xargs kill -9)",
+      "Bash(python3 -m py_compile backend/app.py backend/utils/wishlist_store.py)",
+      "Bash(python3 -c \":*)",
+      "Bash(curl -s http://localhost:8000/api/market-status)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s \"http://localhost:8000/api/options?symbol=NIFTY\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)",
+      "Bash(curl -s \"http://localhost:8000/api/stocks\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''count={d[\"\"count\"\"]}, first={d[\"\"stocks\"\"][0][\"\"symbol\"\"]}, signal={d[\"\"stocks\"\"][0][\"\"signal\"\"]}''\\)\")",
+      "Bash(curl -s \"http://localhost:8000/api/options?symbol=BANKNIFTY\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''symbol={d[\"\"symbol\"\"]}, spot={d[\"\"spot\"\"]}, signal={d[\"\"signal\"\"]}, chain_rows={len\\(d[\"\"chain\"\"]\\)}''\\)\")",
+      "Bash(curl -s \"http://localhost:8000/api/wishlist\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''count={d[\"\"count\"\"]}''\\)\")"
+    ]
+  }
+}
