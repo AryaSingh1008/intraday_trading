@@ -1,13 +1,18 @@
 """
 Options Fetcher – fetches option chain data for Indian indices/stocks.
-Primary  : NSE public API (with session cookie handling)
+Primary  : NSE public API (curl_cffi TLS fingerprinting — Lambda-compatible)
 Fallback : yfinance (Yahoo Finance) option chain
+Last resort: synthetic chain using allIndices spot price
+
+Playwright has been removed — it requires headless Chrome which cannot
+run on AWS Lambda.  curl_cffi impersonates Chrome at the TLS layer instead.
 """
 
 import asyncio
 import logging
 import math
 import time
+from datetime import datetime
 from typing import Optional, List, Dict
 
 try:
@@ -16,6 +21,8 @@ try:
 except ImportError:
     import requests
     _USE_CURL = False
+
+from backend.utils.greeks import compute_greeks
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +64,22 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
+def _days_to_expiry(expiry_str: str) -> int:
+    """
+    Parse NSE expiry string like '27-Mar-2025' or '2025-03-27' and
+    return calendar days remaining from today.  Returns 1 on any parse error
+    (avoids division-by-zero in Black-Scholes).
+    """
+    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            exp_dt = datetime.strptime(expiry_str.strip(), fmt)
+            dte    = (exp_dt.date() - datetime.now().date()).days
+            return max(1, dte)
+        except ValueError:
+            continue
+    return 1
+
+
 def _nse_session():
     """Create a Session with NSE cookies, using curl_cffi if available."""
     if _USE_CURL:
@@ -73,6 +96,9 @@ def _nse_session():
 
 
 class OptionsFetcher:
+
+    # OI snapshot from the previous fetch — used to compute OI change
+    _prev_oi: Dict[str, Dict[float, dict]] = {}
 
     def __init__(self):
         self._session: Optional[requests.Session] = None
@@ -114,17 +140,77 @@ class OptionsFetcher:
         return None
 
     def _fetch(self, symbol: str) -> Optional[Dict]:
-        """Try NSE API first, then fall back to yfinance."""
+        """
+        Fetch priority:
+        1. Direct NSE API (curl_cffi TLS fingerprinting — works on Lambda)
+        2. yfinance (works for some stock options, not Indian indices)
+        3. Synthetic chain with real spot from allIndices (last resort)
+
+        Note: Playwright (headless Chrome) is not used — it cannot run on
+        AWS Lambda.  curl_cffi is the primary NSE data path.
+        """
+        # ── 1. Direct NSE API ─────────────────────────────────────────────────
         result = self._fetch_nse(symbol)
         if result:
             return result
+
+        # ── 2. yfinance ───────────────────────────────────────────────────────
         logger.info(f"NSE fetch failed for {symbol}, trying yfinance...")
         result = self._fetch_yfinance(symbol)
         if result:
             return result
-        # Last resort: synthetic with real spot price
+
+        # ── 3. Synthetic with real spot ───────────────────────────────────────
         spot = self._fetch_real_spot(symbol)
         return self._synthetic_chain(symbol, spot)
+
+    # ── Greeks + OI change helpers ────────────────────────────────────────────
+
+    def _enrich_rows(
+        self,
+        symbol: str,
+        chain_rows: List[Dict],
+        spot: Optional[float],
+        expiry: str,
+    ) -> None:
+        """
+        Mutates each row in *chain_rows* in-place:
+        - Adds call/put Greeks (delta, gamma, theta, vega)
+        - Adds call_oi_change / put_oi_change vs previous fetch snapshot
+        """
+        dte  = _days_to_expiry(expiry)
+        prev = OptionsFetcher._prev_oi.get(symbol, {})
+
+        for row in chain_rows:
+            strike = row["strike"]
+
+            # ── Greeks ──────────────────────────────────────────────────────
+            if spot:
+                c_g = compute_greeks(spot, strike, dte, row.get("call_iv"), "CE")
+                p_g = compute_greeks(spot, strike, dte, row.get("put_iv"),  "PE")
+            else:
+                c_g = p_g = None
+
+            row["call_delta"] = c_g["delta"] if c_g else None
+            row["call_gamma"] = c_g["gamma"] if c_g else None
+            row["call_theta"] = c_g["theta"] if c_g else None
+            row["call_vega"]  = c_g["vega"]  if c_g else None
+            row["put_delta"]  = p_g["delta"] if p_g else None
+            row["put_gamma"]  = p_g["gamma"] if p_g else None
+            row["put_theta"]  = p_g["theta"] if p_g else None
+            row["put_vega"]   = p_g["vega"]  if p_g else None
+
+            # ── OI Change ────────────────────────────────────────────────────
+            prev_strike = prev.get(strike, {})
+            # On first fetch prev_strike is empty → change = 0 (correct)
+            row["call_oi_change"] = row["call_oi"] - prev_strike.get("call_oi", row["call_oi"])
+            row["put_oi_change"]  = row["put_oi"]  - prev_strike.get("put_oi",  row["put_oi"])
+
+        # Update OI snapshot for next fetch
+        OptionsFetcher._prev_oi[symbol] = {
+            r["strike"]: {"call_oi": r["call_oi"], "put_oi": r["put_oi"]}
+            for r in chain_rows
+        }
 
     # ── NSE API ──────────────────────────────────────────────────────────────
 
@@ -220,6 +306,9 @@ class OptionsFetcher:
                     "is_atm":   (strike == atm_strike),
                 })
 
+            # Enrich with Greeks + OI change
+            self._enrich_rows(symbol, chain_rows, spot, expiry)
+
             pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else None
 
             return {
@@ -303,6 +392,7 @@ class OptionsFetcher:
                 p_oi  = int(_safe_float(p.get("openInterest",  0)) or 0)
                 c_ltp = _safe_float(c.get("lastPrice"))
                 p_ltp = _safe_float(p.get("lastPrice"))
+                # yfinance returns IV as decimal (0.20) → convert to percent (20.0)
                 c_iv  = _safe_float(c.get("impliedVolatility"))
                 p_iv  = _safe_float(p.get("impliedVolatility"))
 
@@ -319,6 +409,9 @@ class OptionsFetcher:
                     "put_iv":   round(p_iv * 100, 1) if p_iv else None,
                     "is_atm":   (abs(strike - atm_strike) < 1e-9) if atm_strike else False,
                 })
+
+            # Enrich with Greeks + OI change
+            self._enrich_rows(symbol, chain_rows, spot, expiry)
 
             pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else None
 
@@ -350,10 +443,15 @@ class OptionsFetcher:
 
         chain_rows = [
             {
-                "strike":   s,
-                "call_oi":  0, "call_ltp": None, "call_iv": None,
-                "put_oi":   0, "put_ltp":  None, "put_iv":  None,
-                "is_atm":   (s == atm),
+                "strike":         s,
+                "call_oi":        0, "call_ltp": None, "call_iv": None,
+                "put_oi":         0, "put_ltp":  None, "put_iv":  None,
+                "is_atm":         (s == atm),
+                "call_oi_change": 0, "put_oi_change": 0,
+                "call_delta": None, "call_gamma": None,
+                "call_theta": None, "call_vega":  None,
+                "put_delta":  None, "put_gamma":  None,
+                "put_theta":  None, "put_vega":   None,
             }
             for s in strikes
         ]

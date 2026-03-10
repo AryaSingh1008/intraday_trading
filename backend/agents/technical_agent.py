@@ -8,11 +8,15 @@
   reason strings.
 
   Indicators used (all FREE, from 'ta' library):
-    • RSI   – momentum oscillator
-    • MACD  – trend/momentum
+    • RSI            – momentum oscillator
+    • Stochastic RSI – refined momentum (K/D crossovers)
+    • MACD           – trend/momentum
+    • ADX            – trend strength (+DI / -DI)
     • Bollinger Bands – volatility
     • SMA 20 & 50    – trend direction
-    • Volume ratio   – confirms moves
+    • EMA 9 & 21     – short-term crossover
+    • Volume z-score – confirms moves
+    • ATR            – volatility context
 ====================================================
 """
 
@@ -70,6 +74,22 @@ class TechnicalAgent:
             elif div_type == "bearish":
                 score -= 12
                 reasons.append(div_reason)
+
+            # ── 1c. Stochastic RSI ────────────────────────────
+            stoch_k, stoch_d, stoch_reason = self._stoch_rsi(close)
+            if stoch_k is not None:
+                if stoch_k < 20 and stoch_d < 20:
+                    score += 8
+                    reasons.append(stoch_reason)
+                elif stoch_k > 80 and stoch_d > 80:
+                    score -= 8
+                    reasons.append(stoch_reason)
+                elif stoch_k > stoch_d and stoch_k < 50:   # bullish crossover below midline
+                    score += 4
+                    reasons.append(stoch_reason)
+                elif stoch_k < stoch_d and stoch_k > 50:   # bearish crossover above midline
+                    score -= 4
+                    reasons.append(stoch_reason)
 
             # ── 2.  MACD (12, 26, 9) ─────────────────────────
             macd_line, signal_line = self._macd(close)
@@ -167,6 +187,28 @@ class TechnicalAgent:
                 elif vol_zscore <= -1.0:
                     reasons.append("Below-average volume — move lacks conviction, treat signals with caution")
 
+            # ── 5b. ADX – trend strength ──────────────────────
+            adx_val, plus_di, minus_di = self._adx(high, low, close)
+            if adx_val is not None:
+                if adx_val > 25:
+                    if plus_di > minus_di:
+                        score += 8
+                        reasons.append(
+                            f"ADX {adx_val:.0f} (strong trend) with +DI {plus_di:.0f} > "
+                            f"-DI {minus_di:.0f} — uptrend has real conviction"
+                        )
+                    else:
+                        score -= 8
+                        reasons.append(
+                            f"ADX {adx_val:.0f} (strong trend) with -DI {minus_di:.0f} > "
+                            f"+DI {plus_di:.0f} — downtrend has real conviction"
+                        )
+                elif adx_val < 20:
+                    reasons.append(
+                        f"ADX {adx_val:.0f} — weak trend, market is ranging. "
+                        f"RSI and Stochastic signals more reliable than trend-following here."
+                    )
+
             # ── 6.  ATR volatility context ─────────────────────
             atr = self._atr(high, low, close)
             if atr is not None and current_price > 0:
@@ -232,6 +274,63 @@ class TechnicalAgent:
         atr = tr.rolling(period).mean()
         val = atr.iloc[-1]
         return round(float(val), 4) if not np.isnan(val) else None
+
+    @staticmethod
+    def _stoch_rsi(close: pd.Series, window: int = 14,
+                   smooth_k: int = 3, smooth_d: int = 3):
+        """
+        Stochastic RSI — applies the Stochastic formula to RSI values.
+        Returns (k_pct, d_pct, reason_str) or (None, None, None).
+        k_pct / d_pct are in 0–100 scale.
+        """
+        min_len = window * 2 + smooth_k + smooth_d
+        if len(close) < min_len:
+            return None, None, None
+        try:
+            from ta.momentum import StochRSIIndicator
+            ind = StochRSIIndicator(
+                close=close, window=window, smooth1=smooth_k, smooth2=smooth_d
+            )
+            k = float(ind.stochrsi_k().iloc[-1]) * 100
+            d = float(ind.stochrsi_d().iloc[-1]) * 100
+            if np.isnan(k) or np.isnan(d):
+                return None, None, None
+
+            if k < 20 and d < 20:
+                label = f"Stochastic RSI K={k:.0f}, D={d:.0f} — deeply OVERSOLD, strong buy momentum"
+            elif k > 80 and d > 80:
+                label = f"Stochastic RSI K={k:.0f}, D={d:.0f} — deeply OVERBOUGHT, caution"
+            elif k > d and k < 50:
+                label = f"Stochastic RSI bullish crossover below 50 (K={k:.0f} > D={d:.0f}) — early buy signal"
+            elif k < d and k > 50:
+                label = f"Stochastic RSI bearish crossover above 50 (K={k:.0f} < D={d:.0f}) — early sell signal"
+            else:
+                label = f"Stochastic RSI K={k:.0f}, D={d:.0f} — neutral"
+            return round(k, 1), round(d, 1), label
+        except Exception:
+            return None, None, None
+
+    @staticmethod
+    def _adx(high: pd.Series, low: pd.Series, close: pd.Series,
+             window: int = 14):
+        """
+        Average Directional Index — measures trend strength (NOT direction).
+        Returns (adx, plus_di, minus_di) or (None, None, None).
+        ADX > 25 = trending; ADX < 20 = ranging.
+        """
+        if len(close) < window * 2:
+            return None, None, None
+        try:
+            from ta.trend import ADXIndicator
+            ind     = ADXIndicator(high=high, low=low, close=close, window=window)
+            adx     = float(ind.adx().iloc[-1])
+            plus_di = float(ind.adx_pos().iloc[-1])
+            minus_di= float(ind.adx_neg().iloc[-1])
+            if np.isnan(adx):
+                return None, None, None
+            return round(adx, 1), round(plus_di, 1), round(minus_di, 1)
+        except Exception:
+            return None, None, None
 
     @staticmethod
     def _detect_divergence(close: pd.Series,

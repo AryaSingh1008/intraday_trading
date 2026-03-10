@@ -17,12 +17,32 @@
 
 import asyncio
 import logging
+import re
 from typing import List, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 
 import feedparser
 from email.utils import parsedate_to_datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+# ── Stop words for title deduplication ────────────────────
+_STOP_WORDS = {
+    "the", "a", "an", "of", "in", "on", "at", "for", "to", "is", "are",
+    "was", "were", "and", "or", "but", "by", "with", "as", "its", "it",
+    "this", "that", "from", "into", "up", "down", "over", "under", "be",
+    "has", "have", "had", "will", "would", "could", "should", "may", "can",
+}
+
+
+def _normalize_title(title: str) -> str:
+    """
+    Lowercase, strip punctuation, remove stop words.
+    Returns a condensed key for near-duplicate detection.
+    """
+    t = title.lower()
+    t = re.sub(r"[^a-z0-9 ]", " ", t)
+    words = [w for w in t.split() if w and w not in _STOP_WORDS]
+    return " ".join(words[:12])   # first 12 meaningful words
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +147,11 @@ class SentimentAgent:
             except Exception as e:
                 logger.warning(f"Feed error ({url}): {e}")
 
-        # De-duplicate by title prefix and sort by recency
+        # De-duplicate using normalised title (catches syndicated near-duplicates)
         seen   = set()
         unique = []
         for item in headlines:
-            key = item["title"][:40]
+            key = _normalize_title(item["title"])
             if key not in seen:
                 seen.add(key)
                 unique.append(item)
@@ -189,9 +209,24 @@ class SentimentAgent:
                          company_name: str = "") -> List[str]:
         urls = []
 
-        # Google News – general market
+        # Google News – general Indian market
         urls.append(
             "https://news.google.com/rss/search?q=stock+market+today&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+
+        # Economic Times Markets – high-quality Indian financial news
+        urls.append(
+            "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
+        )
+
+        # Moneycontrol – most popular Indian finance portal
+        urls.append(
+            "https://www.moneycontrol.com/rss/MCtopnews.xml"
+        )
+
+        # Business Standard Markets – premium Indian business news
+        urls.append(
+            "https://www.business-standard.com/rss/markets-106.rss"
         )
 
         if symbol:

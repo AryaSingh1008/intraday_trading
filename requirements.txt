@@ -37,3 +37,10 @@ pytz>=2023.3
 
 # HTML Parsing
 beautifulsoup4>=4.12.2
+
+# Browser automation (NSE option chain scraping — bypasses Akamai bot protection)
+playwright>=1.40.0
+# After installing, run: playwright install chrome
+
+# TLS fingerprint mimicking (alternative NSE access method)
+curl_cffi>=0.5.10

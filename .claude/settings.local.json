@@ -19,7 +19,15 @@
       "Bash(curl -s \"http://localhost:8000/api/options?symbol=BANKNIFTY\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''symbol={d[\"\"symbol\"\"]}, spot={d[\"\"spot\"\"]}, signal={d[\"\"signal\"\"]}, chain_rows={len\\(d[\"\"chain\"\"]\\)}''\\)\")",
       "Bash(curl -s \"http://localhost:8000/api/wishlist\")",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''count={d[\"\"count\"\"]}''\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''count={d[\"\"count\"\"]}''\\)\")",
+      "Bash(python3 -c \"import scipy; print\\(''scipy available''\\)\")",
+      "Bash(python3 -c \"import nsepython; print\\(''nsepython available''\\)\")",
+      "Bash(pip3 show curl_cffi)",
+      "Bash(pip install playwright -q)",
+      "Bash(python3 -c \"import playwright; print\\(''playwright version:'', playwright.__version__\\)\")",
+      "Bash(chmod +x /Users/aryakirtisingh/intraday_trading/infrastructure/build_layers.sh)",
+      "Bash(./infrastructure/build_layers.sh)",
+      "Bash(du -sh /Users/aryakirtisingh/intraday_trading/infrastructure/layers/work/trading-heavy-layer/python/*/)"
     ]
   }
 }

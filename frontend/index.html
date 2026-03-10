@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=4"/>
+  <link rel="stylesheet" href="/css/style.css?v=6"/>
 </head>
 <body>
 
@@ -87,6 +87,10 @@
       <button class="main-tab-btn" id="tab-btn-wishlist" onclick="switchTab('wishlist')">
         <i class="bi bi-heart-fill"></i> Wishlist
         <span class="tab-badge" id="wishlist-tab-count">0</span>
+      </button>
+      <button class="main-tab-btn" id="tab-btn-chat" onclick="switchTab('chat')">
+        <i class="bi bi-robot"></i> AI Chat
+        <span class="badge badge-new ms-1">NEW</span>
       </button>
     </div>
   </div>
@@ -246,19 +250,31 @@
 
       <!-- Option chain table -->
       <div class="chain-table-wrapper mb-5">
-        <h5><i class="bi bi-table me-2"></i>Option Chain
-          <span class="badge bg-secondary ms-2 fs-6" id="options-chain-label"></span>
-        </h5>
+        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+          <h5 class="mb-0"><i class="bi bi-table me-2"></i>Option Chain
+            <span class="badge bg-secondary ms-2 fs-6" id="options-chain-label"></span>
+          </h5>
+          <button class="btn btn-sm btn-outline-secondary" id="greeks-toggle-btn"
+                  onclick="toggleGreeks()" data-active="0">
+            <i class="bi bi-calculator me-1"></i>Show Greeks &amp; OI Change
+          </button>
+        </div>
         <div class="table-responsive">
           <table class="table options-table" id="options-chain-table">
             <thead>
               <tr>
                 <th class="call-col">CALL OI</th>
+                <th class="call-col oi-change-col">OI Chg</th>
                 <th class="call-col">CALL LTP</th>
                 <th class="call-col">CALL IV %</th>
+                <th class="call-col greek-col">Δ Delta</th>
+                <th class="call-col greek-col">Θ Theta/d</th>
                 <th class="strike-col">STRIKE</th>
+                <th class="put-col greek-col">Θ Theta/d</th>
+                <th class="put-col greek-col">Δ Delta</th>
                 <th class="put-col">PUT IV %</th>
                 <th class="put-col">PUT LTP</th>
+                <th class="put-col oi-change-col">OI Chg</th>
                 <th class="put-col">PUT OI</th>
               </tr>
             </thead>
@@ -267,7 +283,8 @@
         </div>
         <p class="text-muted small mt-2">
           <i class="bi bi-info-circle me-1"></i>
-          ATM = At The Money (highlighted). OI = Open Interest. LTP = Last Traded Price. IV = Implied Volatility.
+          ATM = At The Money (★). OI = Open Interest. LTP = Last Traded Price. IV = Implied Volatility.
+          Delta &amp; Theta use Black-Scholes (approximate). Greeks hidden by default — click button to show.
         </p>
       </div>
 
@@ -305,6 +322,70 @@
     <div class="row g-3" id="wishlist-grid"></div>
 
   </div><!-- /tab-wishlist -->
+
+
+  <!-- ════════════════════════════ TAB: AI CHAT ════════════════════════════ -->
+  <div id="tab-chat" class="tab-panel d-none">
+
+    <div class="section-header mb-3">
+      <h2 class="section-title">
+        <i class="bi bi-robot me-2 text-primary"></i>
+        AI Trading Assistant
+      </h2>
+      <p class="text-muted mb-0 fs-6">
+        Ask anything about Indian stocks — powered by AWS Bedrock + Claude Haiku.
+        The AI uses live technical analysis and news sentiment to answer your questions.
+      </p>
+    </div>
+
+    <!-- Suggested questions -->
+    <div class="chat-suggestions mb-3" id="chat-suggestions">
+      <span class="suggestions-label text-muted me-2">Try:</span>
+      <button class="btn-suggestion" onclick="sendSuggestion('Should I buy TCS today?')">Should I buy TCS today?</button>
+      <button class="btn-suggestion" onclick="sendSuggestion('Analyse NIFTY options chain')">Analyse NIFTY options chain</button>
+      <button class="btn-suggestion" onclick="sendSuggestion('Which stocks have the best momentum right now?')">Best momentum stocks?</button>
+      <button class="btn-suggestion" onclick="sendSuggestion('Is INFY overbought?')">Is INFY overbought?</button>
+    </div>
+
+    <!-- Chat messages window -->
+    <div class="chat-window" id="chat-window">
+      <div class="chat-welcome">
+        <div class="chat-welcome-icon">🤖</div>
+        <div class="chat-welcome-text">
+          <strong>Hello! I'm your AI Trading Assistant.</strong><br>
+          I can analyse Indian stocks, options chains, and market sentiment.<br>
+          <span class="text-muted">This is for educational purposes only — not financial advice.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Typing indicator (hidden by default) -->
+    <div class="chat-typing d-none" id="chat-typing">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <span class="ms-2 text-muted fs-6">AI is thinking…</span>
+    </div>
+
+    <!-- Input bar -->
+    <div class="chat-input-bar mt-2">
+      <textarea
+        id="chat-input"
+        class="chat-input"
+        placeholder="Ask about any Indian stock, options, or market analysis…"
+        rows="2"
+        onkeydown="handleChatKey(event)"
+      ></textarea>
+      <button class="btn-chat-send" id="chat-send-btn" onclick="sendChatMessage()">
+        <i class="bi bi-send-fill"></i>
+      </button>
+    </div>
+    <div class="chat-disclaimer text-muted mt-2">
+      <i class="bi bi-info-circle me-1"></i>
+      For educational purposes only. Not financial advice. AI responses may be incorrect.
+    </div>
+
+  </div><!-- /tab-chat -->
 
 </main>
 
@@ -377,6 +458,6 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/app.js?v=4"></script>
+<script src="/js/app.js?v=6"></script>
 </body>
 </html>

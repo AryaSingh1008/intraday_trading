@@ -464,13 +464,31 @@ function renderOptionsResult(d) {
   setEl("options-expiry",       "Expiry: " + (d.expiry||"N/A"));
   setEl("options-explanation",  d.explanation||"");
 
+  // PCR sub-label uses updated thresholds (1.3/0.7 for indices)
+  var pcrSub = "🟡 Neutral";
+  if (d.pcr != null) {
+    pcrSub = d.pcr > 1.3 ? "🟢 Bullish" : (d.pcr < 0.7 ? "🔴 Bearish" : "🟡 Neutral");
+  }
+
+  // IV Percentile card
+  var ivPctVal = "—", ivPctSub = "Building history…";
+  if (d.iv_percentile != null) {
+    ivPctVal = d.iv_percentile.toFixed(0) + "%";
+    if      (d.iv_percentile > 80) ivPctSub = "🔴 Very High — sell premium";
+    else if (d.iv_percentile > 60) ivPctSub = "🟡 Elevated";
+    else if (d.iv_percentile < 20) ivPctSub = "🟢 Very Low — buy options";
+    else if (d.iv_percentile < 40) ivPctSub = "🟢 Below Average";
+    else                           ivPctSub = "🟡 Normal";
+  }
+
   const metrics = [
-    { v: d.pcr != null ? d.pcr.toFixed(2) : "—",            l: "Put-Call Ratio (PCR)",   sub: d.pcr > 1.2 ? "🟢 Bullish" : (d.pcr < 0.8 ? "🔴 Bearish" : "🟡 Neutral") },
-    { v: d.avg_iv != null ? d.avg_iv + "%" : "—",            l: "Avg Implied Volatility", sub: d.avg_iv > 25 ? "🔴 High" : (d.avg_iv < 15 ? "🟢 Low" : "🟡 Normal") },
-    { v: d.max_pain != null ? "₹" + fmt(d.max_pain) : "—",   l: "Max Pain Strike",        sub: "Magnetic level" },
-    { v: d.atm_strike != null ? "₹" + fmt(d.atm_strike) : "—", l: "ATM Strike",           sub: "At The Money" },
-    { v: fmtVol(d.total_call_oi),                             l: "Total Call OI",          sub: "Open Interest" },
-    { v: fmtVol(d.total_put_oi),                              l: "Total Put OI",           sub: "Open Interest" },
+    { v: d.pcr != null ? d.pcr.toFixed(2) : "—",               l: "Put-Call Ratio (PCR)",   sub: pcrSub },
+    { v: d.avg_iv != null ? d.avg_iv + "%" : "—",               l: "Avg Implied Volatility", sub: d.avg_iv > 25 ? "🔴 High" : (d.avg_iv < 15 ? "🟢 Low" : "🟡 Normal") },
+    { v: ivPctVal,                                               l: "IV Percentile (30d)",    sub: ivPctSub },
+    { v: d.max_pain != null ? "₹" + fmt(d.max_pain) : "—",      l: "Max Pain Strike",        sub: "Magnetic level" },
+    { v: d.atm_strike != null ? "₹" + fmt(d.atm_strike) : "—",  l: "ATM Strike",             sub: "At The Money" },
+    { v: fmtVol(d.total_call_oi),                                l: "Total Call OI",          sub: "Open Interest" },
+    { v: fmtVol(d.total_put_oi),                                 l: "Total Put OI",           sub: "Open Interest" },
   ];
 
   const metricsEl = document.getElementById("options-metrics");
@@ -491,12 +509,44 @@ function renderOptionsResult(d) {
   renderChainTable(d.chain || []);
 }
 
+// ── Greeks toggle ────────────────────────────────────────────────────────────
+function toggleGreeks() {
+  var btn    = document.getElementById("greeks-toggle-btn");
+  var active = btn && btn.getAttribute("data-active") === "1";
+  if (btn) {
+    btn.setAttribute("data-active", active ? "0" : "1");
+    btn.innerHTML = active
+      ? '<i class="bi bi-calculator me-1"></i>Show Greeks &amp; OI Change'
+      : '<i class="bi bi-eye-slash me-1"></i>Hide Greeks';
+  }
+  document.querySelectorAll(".greek-col, .oi-change-col").forEach(function(el) {
+    el.style.display = active ? "" : "table-cell";
+  });
+}
+
+// ── Greeks / OI-change helpers ────────────────────────────────────────────────
+function fmtDelta(d) {
+  if (d == null) return '<span class="text-muted">—</span>';
+  var cls = d >= 0 ? "delta-pos" : "delta-neg";
+  return '<span class="' + cls + '">' + d.toFixed(2) + '</span>';
+}
+function fmtTheta(t) {
+  if (t == null) return '<span class="text-muted">—</span>';
+  return '<span class="theta-val">' + t.toFixed(1) + '</span>';
+}
+function fmtOIChange(chg) {
+  if (chg == null || chg === 0) return '<span class="text-muted">—</span>';
+  var cls = chg > 0 ? "oi-build" : "oi-unwind";
+  var arrow = chg > 0 ? "+" : "";
+  return '<span class="' + cls + '">' + arrow + fmtVol(chg) + '</span>';
+}
+
 function renderChainTable(chain) {
   const tbody = document.getElementById("options-chain-body");
   if (!tbody) return;
 
   if (!chain.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No chain data available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">No chain data available.</td></tr>';
     return;
   }
 
@@ -510,13 +560,19 @@ function renderChainTable(chain) {
     const putBar   = oiBar(row.put_oi,  maxPOI, "put");
 
     return '<tr class="' + atmCls + '">'
-      + '<td class="call-col">' + callBar + '</td>'
-      + '<td class="call-col">' + (row.call_ltp != null ? "₹" + row.call_ltp.toFixed(2) : "—") + '</td>'
-      + '<td class="call-col">' + (row.call_iv  != null ? row.call_iv + "%" : "—") + '</td>'
+      + '<td class="call-col">'                      + callBar + '</td>'
+      + '<td class="call-col oi-change-col">'        + fmtOIChange(row.call_oi_change) + '</td>'
+      + '<td class="call-col">'                      + (row.call_ltp != null ? "₹" + row.call_ltp.toFixed(2) : "—") + '</td>'
+      + '<td class="call-col">'                      + (row.call_iv  != null ? row.call_iv + "%" : "—") + '</td>'
+      + '<td class="call-col greek-col">'            + fmtDelta(row.call_delta) + '</td>'
+      + '<td class="call-col greek-col">'            + fmtTheta(row.call_theta) + '</td>'
       + '<td class="strike-col ' + strikeCl + '">₹' + fmt(row.strike) + (row.is_atm ? " ★" : "") + '</td>'
-      + '<td class="put-col">'  + (row.put_iv   != null ? row.put_iv  + "%" : "—") + '</td>'
-      + '<td class="put-col">'  + (row.put_ltp  != null ? "₹" + row.put_ltp.toFixed(2) : "—") + '</td>'
-      + '<td class="put-col">'  + putBar + '</td>'
+      + '<td class="put-col greek-col">'             + fmtTheta(row.put_theta) + '</td>'
+      + '<td class="put-col greek-col">'             + fmtDelta(row.put_delta) + '</td>'
+      + '<td class="put-col">'                       + (row.put_iv   != null ? row.put_iv  + "%" : "—") + '</td>'
+      + '<td class="put-col">'                       + (row.put_ltp  != null ? "₹" + row.put_ltp.toFixed(2) : "—") + '</td>'
+      + '<td class="put-col oi-change-col">'         + fmtOIChange(row.put_oi_change) + '</td>'
+      + '<td class="put-col">'                       + putBar + '</td>'
       + '</tr>';
   }).join("");
 }
@@ -767,4 +823,148 @@ function fmtVol(val) {
   if (n >= 1e5) return (n / 1e5).toFixed(1) + " L";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + " K";
   return n.toLocaleString("en-IN");
+}
+
+// ═══════════════════════════════════════════════════════════════ AI CHAT ════
+
+let chatSessionId = null;   // Bedrock session ID — persists for multi-turn conversation
+let chatBusy      = false;  // prevent double-send while AI is responding
+
+/** Generate a random session ID (UUID v4-style). */
+function _newSessionId() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+/** Handle Enter key in chat textarea (Enter = send, Shift+Enter = newline). */
+function handleChatKey(event) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendChatMessage();
+  }
+}
+
+/** Send a suggested question by pre-filling the input and sending. */
+function sendSuggestion(text) {
+  const input = document.getElementById("chat-input");
+  if (input) input.value = text;
+  sendChatMessage();
+}
+
+/** Main send function — reads input, appends user bubble, calls /api/chat. */
+async function sendChatMessage() {
+  if (chatBusy) return;
+
+  const input = document.getElementById("chat-input");
+  const msg   = input ? input.value.trim() : "";
+  if (!msg) return;
+
+  // Ensure session ID
+  if (!chatSessionId) {
+    chatSessionId = sessionStorage.getItem("chat_session_id");
+    if (!chatSessionId) {
+      chatSessionId = _newSessionId();
+      sessionStorage.setItem("chat_session_id", chatSessionId);
+    }
+  }
+
+  // Clear input, lock UI
+  input.value   = "";
+  chatBusy      = true;
+  const sendBtn = document.getElementById("chat-send-btn");
+  if (sendBtn) sendBtn.disabled = true;
+
+  // Hide suggestions after first message
+  const sugg = document.getElementById("chat-suggestions");
+  if (sugg) sugg.style.display = "none";
+
+  // Render user bubble
+  _appendChatBubble("user", msg);
+
+  // Show typing indicator
+  const typing = document.getElementById("chat-typing");
+  if (typing) typing.classList.remove("d-none");
+
+  // Scroll to bottom
+  _scrollChatToBottom();
+
+  try {
+    const resp = await fetch("/api/chat", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ message: msg, session_id: chatSessionId }),
+    });
+
+    const data = await resp.json();
+
+    if (typing) typing.classList.add("d-none");
+
+    if (resp.ok && data.response) {
+      // Update session ID if Bedrock returned a new one
+      if (data.session_id) {
+        chatSessionId = data.session_id;
+        sessionStorage.setItem("chat_session_id", chatSessionId);
+      }
+      _appendChatBubble("ai", data.response);
+    } else {
+      const errMsg = data.error || `Error ${resp.status}: could not get a response.`;
+      _appendChatBubble("error", errMsg);
+    }
+  } catch (err) {
+    if (typing) typing.classList.add("d-none");
+    _appendChatBubble("error", "Network error — please check your connection and try again.");
+  }
+
+  chatBusy = false;
+  if (sendBtn) sendBtn.disabled = false;
+  if (input)  input.focus();
+  _scrollChatToBottom();
+}
+
+/**
+ * Append a chat bubble to the chat window.
+ * @param {"user"|"ai"|"error"} role
+ * @param {string} text
+ */
+function _appendChatBubble(role, text) {
+  const win = document.getElementById("chat-window");
+  if (!win) return;
+
+  // Remove welcome message on first real message
+  const welcome = win.querySelector(".chat-welcome");
+  if (welcome) welcome.remove();
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble chat-bubble-" + role;
+
+  if (role === "ai") {
+    // Convert markdown-style **bold** and line breaks
+    const formatted = text
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+    bubble.innerHTML = `<div class="bubble-icon">🤖</div><div class="bubble-text">${formatted}</div>`;
+  } else if (role === "user") {
+    bubble.innerHTML = `<div class="bubble-text">${_escHtml(text)}</div><div class="bubble-icon">👤</div>`;
+  } else {
+    // error
+    bubble.innerHTML = `<div class="bubble-icon">⚠️</div><div class="bubble-text text-danger">${_escHtml(text)}</div>`;
+  }
+
+  win.appendChild(bubble);
+}
+
+function _scrollChatToBottom() {
+  const win = document.getElementById("chat-window");
+  if (win) win.scrollTop = win.scrollHeight;
+}
+
+function _escHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\n/g, "<br>");
 }

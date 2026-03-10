@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -23,6 +24,7 @@ from backend.data.options_fetcher import OptionsFetcher
 from backend.agents.options_agent import OptionsAgent
 from backend.utils.excel_exporter import ExcelExporter
 from backend.utils import wishlist_store
+from backend.data import playwright_fetcher
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO,
@@ -38,6 +40,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Playwright background refresh ─────────────────────────
+_playwright_task = None
+
+async def _playwright_refresh_loop():
+    """Background task: refresh NSE option chain data every 150 seconds."""
+    logger.info("Playwright background refresh loop started.")
+    while True:
+        try:
+            await playwright_fetcher.refresh_all()
+        except Exception as e:
+            logger.error(f"Playwright refresh loop error: {e}")
+        await asyncio.sleep(150)   # refresh every 2.5 minutes
+
+
+@app.on_event("startup")
+async def startup_event():
+    global _playwright_task
+    if playwright_fetcher.is_available():
+        logger.info("Starting Playwright NSE option chain background fetcher…")
+        _playwright_task = asyncio.create_task(_playwright_refresh_loop())
+    else:
+        logger.warning("Playwright not available — using fallback options data sources.")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _playwright_task
+    if _playwright_task:
+        _playwright_task.cancel()
+    await playwright_fetcher.shutdown()
 
 # ── Services ─────────────────────────────────────────────
 stock_fetcher   = StockFetcher()
