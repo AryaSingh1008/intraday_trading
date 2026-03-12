@@ -27,7 +27,8 @@
       "Bash(python3 -c \"import playwright; print\\(''playwright version:'', playwright.__version__\\)\")",
       "Bash(chmod +x /Users/aryakirtisingh/intraday_trading/infrastructure/build_layers.sh)",
       "Bash(./infrastructure/build_layers.sh)",
-      "Bash(du -sh /Users/aryakirtisingh/intraday_trading/infrastructure/layers/work/trading-heavy-layer/python/*/)"
+      "Bash(du -sh /Users/aryakirtisingh/intraday_trading/infrastructure/layers/work/trading-heavy-layer/python/*/)",
+      "Bash(terraform plan -out=tfplan)"
     ]
   }
 }

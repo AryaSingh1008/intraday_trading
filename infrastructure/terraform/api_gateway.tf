@@ -83,7 +83,7 @@ resource "aws_apigatewayv2_integration" "excel_export" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.excel_export.invoke_arn
   payload_format_version = "2.0"
-  timeout_milliseconds   = 90000
+  timeout_milliseconds   = 29000   # API GW HTTP v2 max is 30s; Lambda itself can run longer
 }
 
 resource "aws_apigatewayv2_integration" "cache_clear" {
@@ -99,7 +99,7 @@ resource "aws_apigatewayv2_integration" "bedrock_chat" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.bedrock_chat.invoke_arn
   payload_format_version = "2.0"
-  timeout_milliseconds   = 120000
+  timeout_milliseconds   = 29000   # API GW HTTP v2 max is 30s; Bedrock streaming handled client-side
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
