@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# terraform.tfvars.example — TEMPLATE (DO NOT COMMIT ACTUAL FILE)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Instructions:
+# 1. Copy this file to terraform.tfvars (will be gitignored)
+# 2. Fill in YOUR AWS account ID and region
+# 3. Run: terraform apply
+#
+# NOTE: terraform.tfvars is in .gitignore — NEVER commit your actual values
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Your AWS region (e.g., us-east-1, ap-south-1)
+aws_region = "us-east-1"
+
+# Your AWS account ID (find in AWS Console → Account → Account ID)
+# KEEP THIS SECRET! Do not share with anyone.
+aws_account_id = "XXXXXXXXXXXXXX"
+
+# Project name (used for resource naming)
+project_name = "trading"
+
+# Environment (prod, staging, dev)
+environment = "prod"
+
+# Bedrock model ID (Claude 3.5 Haiku requires Anthropic form)
+# Or use Amazon Nova Lite (cross-region, no form needed, supports tool-use)
+bedrock_model_id = "us.amazon.nova-lite-v1:0"
+
+# Set to true AFTER running: infrastructure/build_layers.sh
+lambda_layers_built = true

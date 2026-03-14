@@ -10,6 +10,9 @@ __pycache__/
 *.tfstate.backup
 tfplan
 *.tfplan
+terraform.tfvars           # ← NEVER commit! Use terraform.tfvars.example
+terraform.tfvars.json
+.terraformrc
 
 # Environment / secrets
 .env
