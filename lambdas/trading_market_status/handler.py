@@ -4,9 +4,9 @@ Thin wrapper — reuses the exact logic from backend/app.py market_status route.
 """
 import json
 from datetime import datetime
-import pytz
+from zoneinfo import ZoneInfo   # stdlib in Python 3.9+; Lambda 3.12 includes IANA tz data
 
-IST = pytz.timezone("Asia/Kolkata")
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def handler(event, context):

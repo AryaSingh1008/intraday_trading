@@ -11,12 +11,59 @@ from backend.data.stock_fetcher import StockFetcher
 from backend.agents.signal_agent import SignalAgent
 
 INDIAN_STOCKS = {
-    "RELIANCE.NS": "Reliance Industries", "TCS.NS": "Tata Consultancy Services",
-    "INFY.NS": "Infosys", "HDFCBANK.NS": "HDFC Bank", "ICICIBANK.NS": "ICICI Bank",
-    "WIPRO.NS": "Wipro", "TATAMOTORS.NS": "Tata Motors", "SBIN.NS": "State Bank of India",
-    "AXISBANK.NS": "Axis Bank", "KOTAKBANK.NS": "Kotak Mahindra Bank",
-    "BAJFINANCE.NS": "Bajaj Finance", "SUNPHARMA.NS": "Sun Pharmaceutical",
-    "MARUTI.NS": "Maruti Suzuki", "LT.NS": "Larsen & Toubro", "ONGC.NS": "ONGC",
+    # ── Original large-caps (retained) ────────────────────────────────────────
+    "RELIANCE.NS":   "Reliance Industries",
+    "TCS.NS":        "Tata Consultancy Services",
+    "INFY.NS":       "Infosys",
+    "HDFCBANK.NS":   "HDFC Bank",
+    "ICICIBANK.NS":  "ICICI Bank",
+    "WIPRO.NS":      "Wipro",
+    "TATAMOTORS.NS": "Tata Motors",
+    "SBIN.NS":       "State Bank of India",
+    "AXISBANK.NS":   "Axis Bank",
+    "KOTAKBANK.NS":  "Kotak Mahindra Bank",
+    "BAJFINANCE.NS": "Bajaj Finance",
+    "SUNPHARMA.NS":  "Sun Pharmaceutical",
+    "MARUTI.NS":     "Maruti Suzuki",
+    "LT.NS":         "Larsen & Toubro",
+    "ONGC.NS":       "ONGC",
+    # ── NIFTY 50 additions ────────────────────────────────────────────────────
+    "ADANIENT.NS":   "Adani Enterprises",
+    "ADANIPORTS.NS": "Adani Ports",
+    "APOLLOHOSP.NS": "Apollo Hospitals",
+    "ASIANPAINT.NS": "Asian Paints",
+    "BAJAJ-AUTO.NS": "Bajaj Auto",
+    "BAJAJFINSV.NS": "Bajaj Finserv",
+    "BEL.NS":        "Bharat Electronics",
+    "BPCL.NS":       "Bharat Petroleum",
+    "BHARTIARTL.NS": "Bharti Airtel",
+    "BRITANNIA.NS":  "Britannia Industries",
+    "CIPLA.NS":      "Cipla",
+    "COALINDIA.NS":  "Coal India",
+    "DRREDDY.NS":    "Dr. Reddy's Laboratories",
+    "EICHERMOT.NS":  "Eicher Motors",
+    "GRASIM.NS":     "Grasim Industries",
+    "HCLTECH.NS":    "HCL Technologies",
+    "HDFCLIFE.NS":   "HDFC Life Insurance",
+    "HEROMOTOCO.NS": "Hero MotoCorp",
+    "HINDALCO.NS":   "Hindalco Industries",
+    "HINDUNILVR.NS": "Hindustan Unilever",
+    "INDUSINDBK.NS": "IndusInd Bank",
+    "ITC.NS":        "ITC",
+    "JIOFIN.NS":     "Jio Financial Services",
+    "JSWSTEEL.NS":   "JSW Steel",
+    "LTIM.NS":       "LTIMindtree",
+    "M&M.NS":        "Mahindra & Mahindra",
+    "NESTLEIND.NS":  "Nestle India",
+    "NTPC.NS":       "NTPC",
+    "POWERGRID.NS":  "Power Grid Corporation",
+    "SHRIRAMFIN.NS": "Shriram Finance",
+    "TATACONSUM.NS": "Tata Consumer Products",
+    "TATASTEEL.NS":  "Tata Steel",
+    "TECHM.NS":      "Tech Mahindra",
+    "TITAN.NS":      "Titan Company",
+    "TRENT.NS":      "Trent",
+    "ULTRACEMCO.NS": "UltraTech Cement",
 }
 
 _fetcher = None
@@ -41,7 +88,7 @@ async def _analyse_one(symbol: str, name: str) -> dict:
     if not stock_data:
         return {"symbol": symbol, "name": name, "error": "No data available"}
 
-    result = _agent.analyze(symbol, name, stock_data)
+    result = await _agent.analyze(symbol, name, stock_data)
     dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)
     return result
 

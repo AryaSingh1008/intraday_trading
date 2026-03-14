@@ -63,17 +63,49 @@ async def _analyse(symbol: str) -> dict:
     volume        = stock_data.get("volume", 0)
     avg_volume    = stock_data.get("avg_volume", volume)
 
+    # Treat 0 / None as unavailable so the agent shows a proper message
+    # instead of the literal template placeholder ₹X or ₹0
+    price_available = bool(current_price and current_price > 0)
+    if not price_available:
+        current_price = None
+
     if hist is None or hist.empty:
         return {"symbol": symbol, "error": "Insufficient historical data"}
 
-    tech_score, reasons = _agent.analyze(hist, current_price, volume, avg_volume)
+    tech_score, reasons = _agent.analyze(hist, current_price or 0, volume, avg_volume)
+
+    # Pre-compute price targets using Bollinger Bands + ATR so the agent
+    # uses REAL values rather than hallucinating them.
+    # All targets are None when price is unavailable (market closed).
+    target_price     = None
+    stop_loss        = None
+    target_buy_price = None
+    if price_available and current_price:
+        try:
+            close      = hist["Close"].astype(float)
+            high_s     = hist["High"].astype(float)
+            low_s      = hist["Low"].astype(float)
+            bb_upper, _, bb_lower = TechnicalAgent._bollinger(close)
+            atr        = TechnicalAgent._atr(high_s, low_s, close)
+            if atr and bb_upper and bb_lower:
+                # BUY target / stop
+                target_price     = round(min(bb_upper, current_price + 1.5 * atr), 2)
+                stop_loss        = round(max(bb_lower, current_price - 1.0 * atr), 2)
+                # SELL re-entry
+                target_buy_price = round(max(bb_lower, current_price - 1.5 * atr), 2)
+        except Exception as e:
+            logger.warning("Price target computation failed: %s", e)
 
     result = {
-        "symbol":       symbol,
-        "tech_score":   round(tech_score, 1),
-        "price":        current_price,
-        "reasons":      reasons,
-        "data_source":  "yfinance",
+        "symbol":            symbol,
+        "tech_score":        round(tech_score, 1),
+        "price":             current_price,       # None when market is closed / data delayed
+        "price_available":   price_available,     # explicit flag for the agent
+        "target_price":      target_price,        # ₹ for BUY — None when price unavailable
+        "stop_loss":         stop_loss,           # ₹ for BUY — None when price unavailable
+        "target_buy_price":  target_buy_price,    # ₹ for SELL re-entry — None when unavailable
+        "reasons":           reasons,
+        "data_source":       "yfinance",
     }
 
     dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)

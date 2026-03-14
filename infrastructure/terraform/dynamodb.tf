@@ -48,6 +48,32 @@ resource "aws_dynamodb_table" "wishlist" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DynamoDB Table 4: trading-portfolio
+# Stores user stock holdings for the "My Portfolio" dashboard
+# PK: user_id (S)  SK: holding_id (S, UUID — allows multiple lots per symbol)
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_dynamodb_table" "portfolio" {
+  name         = local.portfolio_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  range_key    = "holding_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "holding_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true   # Real user data — enable PITR
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DynamoDB Table 3: trading-iv-history
 # Replaces data/iv_history.json (30-day rolling IV history)
 # ─────────────────────────────────────────────────────────────────────────────

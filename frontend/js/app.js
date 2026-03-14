@@ -1,6 +1,6 @@
 /* ======================================================
    AI Trading Assistant  –  app.js
-   3-tab layout: Intraday | Options | Wishlist
+   Tabs: Intraday | Wishlist | AI Chat
    ====================================================== */
 
 "use strict";
@@ -12,7 +12,6 @@ let modalChart         = null;
 let wishlistSymbols    = new Set();
 let currentModalSymbol = null;
 let currentTab         = "intraday";
-let currentOptionsSym  = "NIFTY";
 let countdownTimer     = null;
 let countdownSecs      = 300;
 let knownStocks        = [];
@@ -52,21 +51,14 @@ function switchTab(tab) {
   if (panel) panel.classList.remove("d-none");
 
   // Lazy-load on first switch
-  if (tab === "options") {
-    loadOptions(currentOptionsSym);
-  } else if (tab === "wishlist") {
-    loadWishlist();
-  }
+  if (tab === "wishlist")   loadWishlist();
+  if (tab === "portfolio")  loadPortfolio();
 }
 
 function refreshCurrentTab() {
-  if (currentTab === "intraday") {
-    loadStocks(true);
-  } else if (currentTab === "options") {
-    loadOptions(currentOptionsSym, true);
-  } else if (currentTab === "wishlist") {
-    loadWishlist();
-  }
+  if (currentTab === "intraday")   loadStocks(true);
+  else if (currentTab === "wishlist")  loadWishlist();
+  else if (currentTab === "portfolio") loadPortfolio();
 }
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -76,7 +68,8 @@ async function loadKnownStocks() {
     const r = await fetch("/api/stocks/list");
     if (!r.ok) return;
     const d = await r.json();
-    knownStocks = d.stocks || [];
+    // API returns a plain array; guard against {stocks:[]} shape too
+    knownStocks = Array.isArray(d) ? d : (d.stocks || []);
   } catch (_) {}
 }
 
@@ -90,8 +83,8 @@ function onSearchInput() {
 
   const qU = q.toUpperCase();
   const matches = knownStocks.filter(function(s) {
-    return s.symbol.toUpperCase().indexOf(qU) === 0
-        || s.name.toUpperCase().indexOf(qU) >= 0;
+    const bare = s.symbol.replace(".NS","").replace(".BO","").toUpperCase();
+    return bare.includes(qU) || s.name.toUpperCase().includes(qU);
   }).slice(0, 8);
 
   if (!matches.length) { sugg.classList.add("d-none"); return; }
@@ -123,6 +116,86 @@ function selectSuggestion(symbol, name) {
   const sugg = document.getElementById("search-suggestions");
   if (sugg) sugg.classList.add("d-none");
   addToWishlistManual();
+}
+
+// ── Intraday free-form stock search ───────────────────────────────────────────
+
+function onStockSearchInput() {
+  const q   = (document.getElementById("stock-search-input").value || "").trim().toUpperCase();
+  const box = document.getElementById("stock-search-suggestions");
+  if (!q) { box.classList.add("d-none"); return; }
+
+  const matches = knownStocks.filter(function(s) {
+    const bare = s.symbol.replace(".NS", "").replace(".BO", "").toUpperCase();
+    return bare.includes(q) || s.name.toUpperCase().includes(q);
+  }).slice(0, 8);
+
+  if (!matches.length) { box.classList.add("d-none"); return; }
+
+  box.innerHTML = matches.map(function(s) {
+    const bare = s.symbol.replace(".NS", "").replace(".BO", "");
+    const ss   = bare.replace(/'/g, "\\'");
+    return '<div class="suggestion-item" onclick="selectStockSuggestion(\'' + ss + '\')">'
+      + '<span class="suggestion-symbol">' + bare + '</span>'
+      + '<span class="suggestion-name">' + s.name + '</span>'
+      + '</div>';
+  }).join("");
+  box.classList.remove("d-none");
+}
+
+function selectStockSuggestion(bareSymbol) {
+  document.getElementById("stock-search-input").value = bareSymbol;
+  document.getElementById("stock-search-suggestions").classList.add("d-none");
+  analyseCustomStock();
+}
+
+async function analyseCustomStock() {
+  let sym = (document.getElementById("stock-search-input").value || "").trim().toUpperCase();
+  if (!sym) return;
+  document.getElementById("stock-search-suggestions").classList.add("d-none");
+
+  // Auto-append .NS if no exchange suffix provided
+  if (!sym.endsWith(".NS") && !sym.endsWith(".BO")) sym += ".NS";
+
+  const container = document.getElementById("search-result-container");
+  container.style.display = "block";
+  container.innerHTML =
+    '<div class="text-center py-4">'
+    + '<div class="spinner-border text-primary"></div>'
+    + '<p class="mt-2 text-muted">Analysing ' + sym + '\u2026</p>'
+    + '</div>';
+
+  try {
+    // encodeURIComponent handles M&M → M%26M correctly; API Gateway decodes it back
+    const r    = await fetch("/api/stock/" + encodeURIComponent(sym));
+    const data = await r.json();
+
+    if (data.error || data.unavailable) {
+      container.innerHTML =
+        '<div class="alert alert-warning">'
+        + '\u26a0\ufe0f Could not analyse <strong>' + sym + '</strong>. '
+        + (data.error || data.explanation || "No data available on Yahoo Finance.")
+        + '</div>';
+      return;
+    }
+
+    container.innerHTML =
+      '<div class="d-flex align-items-center gap-2 mb-2">'
+      + '<span class="fw-semibold text-muted">\uD83D\uDD0D Search result</span>'
+      + '<button class="btn btn-sm btn-outline-secondary" '
+      + 'onclick="document.getElementById(\'search-result-container\').style.display=\'none\'">'
+      + '\u2715 Clear</button>'
+      + '</div>'
+      + stockCard(data, false);
+
+    // Sync wishlist heart state for the result card
+    container.querySelectorAll(".btn-heart").forEach(function(btn) {
+      if (wishlistSymbols.has(btn.dataset.symbol)) btn.classList.add("active");
+    });
+  } catch (e) {
+    container.innerHTML =
+      '<div class="alert alert-danger">Error fetching data for ' + sym + '. Please try again.</div>';
+  }
 }
 
 // ── Market status ─────────────────────────────────────────────────────────────
@@ -278,6 +351,24 @@ function stockCard(s, fromWishlist) {
       + '<i class="bi bi-x-circle me-1"></i> Remove from Wishlist</button>'
     : "";
 
+  // ── Target price chips ──────────────────────────────────────────
+  let targetHtml = "";
+  if ((sig === "BUY" || sig === "STRONG BUY") && s.target_price) {
+    targetHtml = '<div class="target-row">'
+      + '<span class="target-chip target-buy-chip">🎯 Target ₹' + fmt(s.target_price) + '</span>'
+      + (s.stop_loss ? '<span class="target-chip target-stop-chip">🛑 Stop ₹' + fmt(s.stop_loss) + '</span>' : '')
+      + '</div>';
+  } else if ((sig === "SELL" || sig === "STRONG SELL") && s.target_buy_price) {
+    targetHtml = '<div class="target-row">'
+      + '<span class="target-chip target-reenter-chip">💡 Re-enter ₹' + fmt(s.target_buy_price) + '</span>'
+      + '</div>';
+  }
+
+  // ── Add to Portfolio button ─────────────────────────────────────
+  const addPortBtn = '<button class="btn-add-port" onclick="openAddPortModal(\''
+    + s.symbol + '\',\'' + safeName + '\',' + (s.current_price || 0) + ',event)">'
+    + '<i class="bi bi-plus-circle me-1"></i>Add to Portfolio</button>';
+
   return '<div class="col-12 col-sm-6 col-lg-4">'
     + '<div class="stock-card signal-' + sigClass + '" onclick="showDetail(\'' + s.symbol + '\')">'
     + '<div class="card-band ' + bandCls + '"></div>'
@@ -297,8 +388,11 @@ function stockCard(s, fromWishlist) {
     + '<span class="risk-pill risk-' + (s.risk||"MEDIUM") + '">' + (s.risk||"MEDIUM") + ' RISK</span>'
     + '</div>'
     + scoreBar
+    + targetHtml
+    + '<div class="card-footer-row">'
+    + addPortBtn
     + removeBtn
-    + '<div class="card-click-hint mt-2">Tap card for full analysis</div>'
+    + '</div>'
     + '</div></div></div>';
 }
 
@@ -356,6 +450,10 @@ async function showDetail(symbol) {
       { v: fmtVol(s.volume),                           l: "Volume"          },
       { v: fmtVol(s.avg_volume),                       l: "Avg Volume"      },
     ];
+    // Target price entries (only shown when present)
+    if (s.target_price)     stats.push({ v: "₹" + fmt(s.target_price),     l: "🎯 Target Price"    });
+    if (s.stop_loss)        stats.push({ v: "₹" + fmt(s.stop_loss),         l: "🛑 Stop Loss"       });
+    if (s.target_buy_price) stats.push({ v: "₹" + fmt(s.target_buy_price),  l: "💡 Re-entry Target" });
     const statsEl = document.getElementById("modal-stats");
     if (statsEl) statsEl.innerHTML = stats.map(function(st) {
       return '<div class="col-6 col-md-4"><div class="stat-box">'
@@ -382,8 +480,15 @@ function renderModalChart(s) {
   if (!ctx) return;
   if (modalChart) { modalChart.destroy(); modalChart = null; }
 
-  const prices = s.intraday && s.intraday.prices ? s.intraday.prices : [];
-  const labels = s.intraday && s.intraday.labels ? s.intraday.labels : [];
+  // Backend returns intraday as [{time, price}, ...] array
+  let prices = [], labels = [];
+  if (Array.isArray(s.intraday) && s.intraday.length) {
+    prices = s.intraday.map(function(d) { return d.price; });
+    labels = s.intraday.map(function(d) { return d.time;  });
+  } else if (s.intraday && s.intraday.prices) {
+    prices = s.intraday.prices;
+    labels = s.intraday.labels || [];
+  }
   const note   = document.getElementById("chart-note");
 
   if (!prices.length) {
@@ -422,168 +527,6 @@ function exportExcel() {
   window.location.href = "/api/export";
 }
 
-// ═══════════════════════════════════════════════════════════════ OPTIONS TAB ═
-
-async function loadOptions(symbol, forceRefresh) {
-  currentOptionsSym = symbol;
-
-  document.querySelectorAll(".btn-instrument").forEach(function(b) { b.classList.remove("active"); });
-  const activeBtn = document.getElementById("inst-" + symbol);
-  if (activeBtn) activeBtn.classList.add("active");
-
-  if (forceRefresh) {
-    await fetch("/api/cache", { method: "DELETE" });
-  }
-
-  hideEl("options-result");
-  hideEl("options-error");
-  showEl("options-loading");
-
-  try {
-    const r = await fetch("/api/options?symbol=" + symbol);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-
-    renderOptionsResult(d);
-    hideEl("options-loading");
-    showEl("options-result");
-  } catch (e) {
-    console.error("Options error:", e);
-    hideEl("options-loading");
-    showEl("options-error");
-  }
-}
-
-function renderOptionsResult(d) {
-  const banner = document.getElementById("options-signal-banner");
-  if (banner) banner.className = "options-signal-banner mb-4 " + d.signal;
-
-  setEl("options-instrument-name", d.symbol + (d.spot ? " — ₹" + fmt(d.spot) : ""));
-  setEl("options-spot-price",  d.spot ? "Spot Price: ₹" + fmt(d.spot) : "Spot unavailable");
-  setEl("options-signal-label", (d.signal_emoji||"") + " " + d.signal);
-  setEl("options-expiry",       "Expiry: " + (d.expiry||"N/A"));
-  setEl("options-explanation",  d.explanation||"");
-
-  // PCR sub-label uses updated thresholds (1.3/0.7 for indices)
-  var pcrSub = "🟡 Neutral";
-  if (d.pcr != null) {
-    pcrSub = d.pcr > 1.3 ? "🟢 Bullish" : (d.pcr < 0.7 ? "🔴 Bearish" : "🟡 Neutral");
-  }
-
-  // IV Percentile card
-  var ivPctVal = "—", ivPctSub = "Building history…";
-  if (d.iv_percentile != null) {
-    ivPctVal = d.iv_percentile.toFixed(0) + "%";
-    if      (d.iv_percentile > 80) ivPctSub = "🔴 Very High — sell premium";
-    else if (d.iv_percentile > 60) ivPctSub = "🟡 Elevated";
-    else if (d.iv_percentile < 20) ivPctSub = "🟢 Very Low — buy options";
-    else if (d.iv_percentile < 40) ivPctSub = "🟢 Below Average";
-    else                           ivPctSub = "🟡 Normal";
-  }
-
-  const metrics = [
-    { v: d.pcr != null ? d.pcr.toFixed(2) : "—",               l: "Put-Call Ratio (PCR)",   sub: pcrSub },
-    { v: d.avg_iv != null ? d.avg_iv + "%" : "—",               l: "Avg Implied Volatility", sub: d.avg_iv > 25 ? "🔴 High" : (d.avg_iv < 15 ? "🟢 Low" : "🟡 Normal") },
-    { v: ivPctVal,                                               l: "IV Percentile (30d)",    sub: ivPctSub },
-    { v: d.max_pain != null ? "₹" + fmt(d.max_pain) : "—",      l: "Max Pain Strike",        sub: "Magnetic level" },
-    { v: d.atm_strike != null ? "₹" + fmt(d.atm_strike) : "—",  l: "ATM Strike",             sub: "At The Money" },
-    { v: fmtVol(d.total_call_oi),                                l: "Total Call OI",          sub: "Open Interest" },
-    { v: fmtVol(d.total_put_oi),                                 l: "Total Put OI",           sub: "Open Interest" },
-  ];
-
-  const metricsEl = document.getElementById("options-metrics");
-  if (metricsEl) metricsEl.innerHTML = metrics.map(function(m) {
-    return '<div class="col-6 col-md-4"><div class="stat-box">'
-      + '<div class="stat-val">' + m.v + '</div>'
-      + '<div class="stat-lbl">' + m.l + '</div>'
-      + '<div class="text-muted" style="font-size:.75rem">' + (m.sub||"") + '</div>'
-      + '</div></div>';
-  }).join("");
-
-  const rEl = document.getElementById("options-reasons");
-  if (rEl) rEl.innerHTML = (d.reasons||[]).map(function(r) { return "<li>" + r + "</li>"; }).join("");
-
-  const lbl = document.getElementById("options-chain-label");
-  if (lbl) lbl.textContent = "Expiry: " + (d.expiry||"N/A") + " · " + (d.chain ? d.chain.length : 0) + " strikes";
-
-  renderChainTable(d.chain || []);
-}
-
-// ── Greeks toggle ────────────────────────────────────────────────────────────
-function toggleGreeks() {
-  var btn    = document.getElementById("greeks-toggle-btn");
-  var active = btn && btn.getAttribute("data-active") === "1";
-  if (btn) {
-    btn.setAttribute("data-active", active ? "0" : "1");
-    btn.innerHTML = active
-      ? '<i class="bi bi-calculator me-1"></i>Show Greeks &amp; OI Change'
-      : '<i class="bi bi-eye-slash me-1"></i>Hide Greeks';
-  }
-  document.querySelectorAll(".greek-col, .oi-change-col").forEach(function(el) {
-    el.style.display = active ? "" : "table-cell";
-  });
-}
-
-// ── Greeks / OI-change helpers ────────────────────────────────────────────────
-function fmtDelta(d) {
-  if (d == null) return '<span class="text-muted">—</span>';
-  var cls = d >= 0 ? "delta-pos" : "delta-neg";
-  return '<span class="' + cls + '">' + d.toFixed(2) + '</span>';
-}
-function fmtTheta(t) {
-  if (t == null) return '<span class="text-muted">—</span>';
-  return '<span class="theta-val">' + t.toFixed(1) + '</span>';
-}
-function fmtOIChange(chg) {
-  if (chg == null || chg === 0) return '<span class="text-muted">—</span>';
-  var cls = chg > 0 ? "oi-build" : "oi-unwind";
-  var arrow = chg > 0 ? "+" : "";
-  return '<span class="' + cls + '">' + arrow + fmtVol(chg) + '</span>';
-}
-
-function renderChainTable(chain) {
-  const tbody = document.getElementById("options-chain-body");
-  if (!tbody) return;
-
-  if (!chain.length) {
-    tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">No chain data available.</td></tr>';
-    return;
-  }
-
-  const maxCOI = Math.max.apply(null, chain.map(function(r) { return r.call_oi || 0; }).concat([1]));
-  const maxPOI = Math.max.apply(null, chain.map(function(r) { return r.put_oi  || 0; }).concat([1]));
-
-  tbody.innerHTML = chain.map(function(row) {
-    const atmCls   = row.is_atm ? "atm-row" : "";
-    const strikeCl = row.is_atm ? "strike-cell" : "";
-    const callBar  = oiBar(row.call_oi, maxCOI, "call");
-    const putBar   = oiBar(row.put_oi,  maxPOI, "put");
-
-    return '<tr class="' + atmCls + '">'
-      + '<td class="call-col">'                      + callBar + '</td>'
-      + '<td class="call-col oi-change-col">'        + fmtOIChange(row.call_oi_change) + '</td>'
-      + '<td class="call-col">'                      + (row.call_ltp != null ? "₹" + row.call_ltp.toFixed(2) : "—") + '</td>'
-      + '<td class="call-col">'                      + (row.call_iv  != null ? row.call_iv + "%" : "—") + '</td>'
-      + '<td class="call-col greek-col">'            + fmtDelta(row.call_delta) + '</td>'
-      + '<td class="call-col greek-col">'            + fmtTheta(row.call_theta) + '</td>'
-      + '<td class="strike-col ' + strikeCl + '">₹' + fmt(row.strike) + (row.is_atm ? " ★" : "") + '</td>'
-      + '<td class="put-col greek-col">'             + fmtTheta(row.put_theta) + '</td>'
-      + '<td class="put-col greek-col">'             + fmtDelta(row.put_delta) + '</td>'
-      + '<td class="put-col">'                       + (row.put_iv   != null ? row.put_iv  + "%" : "—") + '</td>'
-      + '<td class="put-col">'                       + (row.put_ltp  != null ? "₹" + row.put_ltp.toFixed(2) : "—") + '</td>'
-      + '<td class="put-col oi-change-col">'         + fmtOIChange(row.put_oi_change) + '</td>'
-      + '<td class="put-col">'                       + putBar + '</td>'
-      + '</tr>';
-  }).join("");
-}
-
-function oiBar(oi, maxOI, side) {
-  if (!oi) return '<span class="text-muted">0</span>';
-  const pct = Math.min(100, Math.round((oi / maxOI) * 100));
-  return '<div class="oi-bar"><span>' + fmtVol(oi) + '</span>'
-    + '<div class="oi-bar-bg"><div class="oi-bar-fill ' + side + '" style="width:' + pct + '%"></div></div></div>';
-}
-
 // ═══════════════════════════════════════════════════════════════ WISHLIST TAB ═
 
 async function loadWishlistSymbols() {
@@ -591,8 +534,10 @@ async function loadWishlistSymbols() {
     const r = await fetch("/api/wishlist");
     if (!r.ok) return;
     const d = await r.json();
-    wishlistSymbols = new Set((d.stocks||[]).map(function(s) { return s.symbol; }));
-    updateWishlistBadge(d.stocks ? d.stocks.length : 0);
+    // Lambda returns {"wishlist":[...]}, guard against legacy {"stocks":[...]} too
+    const items = d.wishlist || d.stocks || [];
+    wishlistSymbols = new Set(items.map(function(s) { return s.symbol; }));
+    updateWishlistBadge(items.length);
   } catch (_) {}
 }
 
@@ -611,18 +556,39 @@ async function loadWishlist() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
 
-    hideEl("wishlist-loading");
-    const stocks = d.stocks || [];
-    wishlistSymbols = new Set(stocks.map(function(s) { return s.symbol; }));
-    updateWishlistBadge(stocks.length);
-    setEl("wishlist-count", stocks.length);
+    // Lambda returns {"wishlist":[...]}, guard against legacy {"stocks":[...]} too
+    const wishItems = d.wishlist || d.stocks || [];
+    wishlistSymbols = new Set(wishItems.map(function(s) { return s.symbol; }));
+    updateWishlistBadge(wishItems.length);
+    setEl("wishlist-count", wishItems.length);
 
-    if (!stocks.length) {
+    if (!wishItems.length) {
+      hideEl("wishlist-loading");
       showEl("wishlist-empty");
       return;
     }
 
-    if (grid) grid.innerHTML = stocks.map(function(s) { return stockCard(s, true); }).join("");
+    // Fetch full analysis for each wishlist stock in parallel
+    const analyzed = await Promise.all(
+      wishItems.map(async function(item) {
+        try {
+          const sr = await fetch("/api/stock/" + encodeURIComponent(item.symbol));
+          if (!sr.ok) return { symbol: item.symbol, name: item.name, unavailable: true,
+                               explanation: "Could not load stock data." };
+          const data = await sr.json();
+          return (data.error || data.unavailable)
+            ? { symbol: item.symbol, name: item.name, unavailable: true,
+                explanation: data.error || "No data available." }
+            : data;
+        } catch (_) {
+          return { symbol: item.symbol, name: item.name, unavailable: true,
+                   explanation: "Network error fetching data." };
+        }
+      })
+    );
+
+    hideEl("wishlist-loading");
+    if (grid) grid.innerHTML = analyzed.map(function(s) { return stockCard(s, true); }).join("");
   } catch (e) {
     hideEl("wishlist-loading");
     showEl("wishlist-empty");
@@ -790,7 +756,6 @@ function startCountdown() {
     if (countdownSecs <= 0) {
       countdownSecs = 300;
       loadStocks(true);
-      if (currentTab === "options") loadOptions(currentOptionsSym, true);
       loadNews();
     }
   }, 1000);
@@ -967,4 +932,147 @@ function _escHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/\n/g, "<br>");
+}
+
+// ════════════════════════════════════════════════════ MY PORTFOLIO ════
+
+/** Open "Add to Portfolio" modal, pre-filled with stock details. */
+function openAddPortModal(symbol, name, price, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  document.getElementById("port-symbol").value    = symbol;
+  document.getElementById("port-name").textContent = name + " (" + symbol + ")";
+  document.getElementById("port-buy-price").value  = price || "";
+  document.getElementById("port-qty").value         = 1;
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("port-buy-date").value   = today;
+  new bootstrap.Modal(document.getElementById("addPortModal")).show();
+}
+
+/** POST a new holding to /api/portfolio. */
+async function addHolding() {
+  const symbol   = (document.getElementById("port-symbol").value   || "").trim();
+  const name     = (document.getElementById("port-name").textContent || symbol).replace(/\s*\(.*\)/, "").trim();
+  const buyPrice = parseFloat(document.getElementById("port-buy-price").value);
+  const qty      = parseInt(document.getElementById("port-qty").value, 10);
+  const buyDate  = document.getElementById("port-buy-date").value;
+
+  if (!symbol || isNaN(buyPrice) || buyPrice <= 0 || isNaN(qty) || qty <= 0) {
+    showToast("Please fill in all fields correctly."); return;
+  }
+  try {
+    const r = await fetch("/api/portfolio", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ symbol, name, buy_price: buyPrice, quantity: qty, buy_date: buyDate }),
+    });
+    const d = await r.json();
+    if (!r.ok) { showToast("Could not add holding: " + (d.error || r.status)); return; }
+    bootstrap.Modal.getInstance(document.getElementById("addPortModal")).hide();
+    showToast("✅ " + symbol + " added to portfolio!");
+    if (currentTab === "portfolio") loadPortfolio();
+  } catch (e) {
+    showToast("Network error. Please try again.");
+  }
+}
+
+/** DELETE a holding from /api/portfolio/{holding_id}. */
+async function removeHolding(holdingId, symbol, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  if (!confirm("Remove " + symbol + " from your portfolio?")) return;
+  try {
+    await fetch("/api/portfolio/" + encodeURIComponent(holdingId), { method: "DELETE" });
+    showToast("🗑️ " + symbol + " removed from portfolio.");
+    loadPortfolio();
+  } catch (e) {
+    showToast("Could not remove holding. Please try again.");
+  }
+}
+
+/** Load portfolio holdings and render the dashboard. */
+async function loadPortfolio() {
+  showEl("portfolio-loading");
+  hideEl("portfolio-empty");
+  const summary = document.getElementById("portfolio-summary");
+  const table   = document.getElementById("portfolio-table-body");
+  if (summary) summary.innerHTML = "";
+  if (table)   table.innerHTML   = "";
+
+  try {
+    const r = await fetch("/api/portfolio");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    hideEl("portfolio-loading");
+
+    const holdings = d.holdings || [];
+    if (!holdings.length) { showEl("portfolio-empty"); return; }
+
+    renderPortfolioSummary(d.summary || {});
+    renderPortfolioTable(holdings);
+  } catch (e) {
+    hideEl("portfolio-loading");
+    showEl("portfolio-empty");
+    console.error(e);
+  }
+}
+
+function renderPortfolioSummary(s) {
+  const el = document.getElementById("portfolio-summary");
+  if (!el) return;
+  const gain     = s.total_gain    || 0;
+  const dayGain  = s.day_gain      || 0;
+  const gainCls  = gain    >= 0 ? "port-pos" : "port-neg";
+  const dayCls   = dayGain >= 0 ? "port-pos" : "port-neg";
+  const gainArrow  = gain    >= 0 ? "▲" : "▼";
+  const dayArrow   = dayGain >= 0 ? "▲" : "▼";
+
+  el.innerHTML =
+    portSummaryCard("💰", "Invested",      "₹" + fmt(s.total_invested),  "")
+  + portSummaryCard("📈", "Current Value", "₹" + fmt(s.current_value),   "")
+  + portSummaryCard("📊", "Total P&L",
+      '<span class="' + gainCls + '">' + gainArrow + ' ₹' + fmt(Math.abs(gain)) + '</span>',
+      '<span class="' + gainCls + '">' + (s.total_gain_pct||0).toFixed(2) + '%</span>')
+  + portSummaryCard("📅", "Today's P&L",
+      '<span class="' + dayCls + '">' + dayArrow + ' ₹' + fmt(Math.abs(dayGain)) + '</span>',
+      "");
+}
+
+function portSummaryCard(icon, label, value, sub) {
+  return '<div class="col-6 col-md-3">'
+    + '<div class="port-summary-card">'
+    + '<div class="port-summary-icon">' + icon + '</div>'
+    + '<div class="port-summary-val">'  + value + '</div>'
+    + (sub ? '<div class="port-summary-sub">' + sub + '</div>' : '')
+    + '<div class="port-summary-lbl">'  + label + '</div>'
+    + '</div></div>';
+}
+
+function renderPortfolioTable(holdings) {
+  const tbody = document.getElementById("portfolio-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = holdings.map(function(h) {
+    const tGain    = h.total_gain    || 0;
+    const dGain    = h.day_gain      || 0;
+    const tCls     = tGain >= 0 ? "port-pos" : "port-neg";
+    const dCls     = dGain >= 0 ? "port-pos" : "port-neg";
+    const tArrow   = tGain >= 0 ? "▲" : "▼";
+    const dArrow   = dGain >= 0 ? "▲" : "▼";
+    const safeSym  = (h.symbol || "").replace(/'/g, "\\'");
+    const safeId   = (h.holding_id || "").replace(/'/g, "\\'");
+
+    return '<tr>'
+      + '<td><div class="fw-bold">' + (h.name||h.symbol) + '</div>'
+      + '<div class="text-muted small">' + h.symbol + '</div></td>'
+      + '<td>₹' + fmt(h.buy_price) + '</td>'
+      + '<td>' + (h.current_price ? '₹' + fmt(h.current_price) : '<span class="text-muted">—</span>') + '</td>'
+      + '<td>' + (h.quantity||0) + '</td>'
+      + '<td>₹' + fmt(h.invested) + '</td>'
+      + '<td>' + (h.current_value ? '₹' + fmt(h.current_value) : '—') + '</td>'
+      + '<td class="' + dCls + '">' + dArrow + ' ₹' + fmt(Math.abs(dGain))
+      + '<div class="small">' + (h.day_gain_pct||0).toFixed(2) + '%</div></td>'
+      + '<td class="' + tCls + '">' + tArrow + ' ₹' + fmt(Math.abs(tGain))
+      + '<div class="small">' + (h.total_gain_pct||0).toFixed(2) + '%</div></td>'
+      + '<td><button class="btn-remove-hold" onclick="removeHolding(\'' + safeId + '\',\'' + safeSym + '\',event)">'
+      + '<i class="bi bi-x-circle"></i></button></td>'
+      + '</tr>';
+  }).join("");
 }

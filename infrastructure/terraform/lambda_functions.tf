@@ -36,6 +36,13 @@ data "archive_file" "wishlist" {
   excludes    = ["__pycache__", "*.pyc", ".DS_Store"]
 }
 
+data "archive_file" "portfolio" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/trading_portfolio"
+  output_path = "${local.layers_dir}/zips/trading_portfolio.zip"
+  excludes    = ["__pycache__", "*.pyc", ".DS_Store"]
+}
+
 data "archive_file" "market_status" {
   type        = "zip"
   source_dir  = "${local.lambdas_dir}/trading_market_status"
@@ -96,10 +103,10 @@ resource "aws_lambda_function" "stocks_signal" {
   handler          = "handler.handler"
   filename         = data.archive_file.stocks_signal.output_path
   source_code_hash = data.archive_file.stocks_signal.output_base64sha256
-  timeout          = 60
+  timeout          = 120
   memory_size      = 1024
 
-  layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
+  layers = compact([local.heavy_layer_arn, local.nlp_layer_arn, local.backend_layer_arn])
 
   environment {
     variables = merge(local.common_env, {
@@ -259,6 +266,25 @@ resource "aws_lambda_function" "excel_export" {
 # BOTO3-ONLY FUNCTIONS — no layer needed (boto3 pre-installed in Lambda runtime)
 # ─────────────────────────────────────────────────────────────────────────────
 
+resource "aws_lambda_function" "portfolio" {
+  function_name    = local.lambda_names.portfolio
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "python3.12"
+  handler          = "handler.handler"
+  filename         = data.archive_file.portfolio.output_path
+  source_code_hash = data.archive_file.portfolio.output_base64sha256
+  timeout          = 15
+  memory_size      = 256
+
+  layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
+
+  environment {
+    variables = local.common_env
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_logs]
+}
+
 resource "aws_lambda_function" "wishlist" {
   function_name    = local.lambda_names.wishlist
   role             = aws_iam_role.lambda_exec.arn
@@ -330,7 +356,10 @@ resource "aws_lambda_function" "bedrock_chat" {
 
   environment {
     variables = merge(local.common_env, {
-      BEDROCK_AGENT_ID       = "PLACEHOLDER_REPLACE_AFTER_BEDROCK_DEPLOY"
+      BEDROCK_AGENT_ID       = aws_bedrockagent_agent.trading_advisor.id
+      # TSTALIASID is the built-in alias that always routes to the prepared DRAFT.
+      # The named prod alias points to v1 (old model requiring use-case form);
+      # TSTALIASID uses the DRAFT which is on Claude 3.5 Haiku (no form needed).
       BEDROCK_AGENT_ALIAS_ID = "TSTALIASID"
     })
   }
@@ -351,6 +380,7 @@ locals {
     excel_export     = aws_lambda_function.excel_export.function_name
     cache_clear      = aws_lambda_function.cache_clear.function_name
     bedrock_chat     = aws_lambda_function.bedrock_chat.function_name
+    portfolio        = aws_lambda_function.portfolio.function_name
   }
 }
 

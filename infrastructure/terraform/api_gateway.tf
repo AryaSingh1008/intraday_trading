@@ -43,7 +43,7 @@ resource "aws_apigatewayv2_integration" "stocks_signal" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.stocks_signal.invoke_arn
   payload_format_version = "2.0"
-  timeout_milliseconds   = 60000
+  timeout_milliseconds   = 29000   # API GW HTTP v2 max is 30s
 }
 
 resource "aws_apigatewayv2_integration" "options_analysis" {
@@ -181,4 +181,30 @@ resource "aws_apigatewayv2_route" "post_chat" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "POST /api/chat"
   target    = "integrations/${aws_apigatewayv2_integration.bedrock_chat.id}"
+}
+
+resource "aws_apigatewayv2_integration" "portfolio" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.portfolio.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 15000
+}
+
+resource "aws_apigatewayv2_route" "get_portfolio" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/portfolio"
+  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+}
+
+resource "aws_apigatewayv2_route" "post_portfolio" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/portfolio"
+  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+}
+
+resource "aws_apigatewayv2_route" "delete_portfolio" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "DELETE /api/portfolio/{holding_id}"
+  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
 }

@@ -5,7 +5,6 @@ Input  API schema: { "symbol": "INFY.NS", "company_name": "Infosys" }
 Output: { sentiment_score, sentiment_label, top_headlines[], reasons[] }
 """
 import json
-import os
 import asyncio
 import logging
 
@@ -38,32 +37,32 @@ def _parse_parameters(event: dict) -> dict:
     return params
 
 
+def _score_to_label(score: float) -> str:
+    """Convert numeric score (-50..+50) to a sentiment label."""
+    if score >= 15:
+        return "BULLISH"
+    elif score <= -15:
+        return "BEARISH"
+    return "NEUTRAL"
+
+
 async def _analyse(symbol: str, company_name: str) -> dict:
     cache_key = f"news_{symbol}"
     cached    = dynamo_cache.get_cached(cache_key)
     if cached:
         return cached
 
-    try:
-        score, label, headlines, reasons = await _agent.get_sentiment_score(
-            symbol, company_name
-        )
-    except TypeError:
-        # If agent returns 3-tuple without reasons
-        result_raw = await _agent.get_sentiment_score(symbol, company_name)
-        if isinstance(result_raw, (list, tuple)) and len(result_raw) >= 3:
-            score, label, headlines = result_raw[:3]
-            reasons = []
-        else:
-            return {"symbol": symbol, "error": "Unexpected sentiment response"}
+    # get_sentiment_score returns (score: float, reasons: List[str])
+    score, reasons = await _agent.get_sentiment_score(symbol, company_name)
+    headlines = await _agent.get_news(symbol)
 
     result = {
         "symbol":          symbol,
         "company_name":    company_name,
         "sentiment_score": round(float(score), 1) if score is not None else 0,
-        "sentiment_label": label or "NEUTRAL",
-        "top_headlines":   headlines[:5] if headlines else [],
-        "reasons":         reasons[:5]   if reasons   else [],
+        "sentiment_label": _score_to_label(score or 0),
+        "top_headlines":   [h.get("title", "") for h in headlines[:5]],
+        "reasons":         reasons[:5] if reasons else [],
     }
 
     dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)

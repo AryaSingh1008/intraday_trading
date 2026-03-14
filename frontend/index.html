@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=6"/>
+  <link rel="stylesheet" href="/css/style.css?v=10"/>
 </head>
 <body>
 
@@ -81,9 +81,6 @@
       <button class="main-tab-btn active" id="tab-btn-intraday" onclick="switchTab('intraday')">
         <i class="bi bi-bar-chart-line-fill"></i> Intraday
       </button>
-      <button class="main-tab-btn" id="tab-btn-options" onclick="switchTab('options')">
-        <i class="bi bi-layers-fill"></i> Options
-      </button>
       <button class="main-tab-btn" id="tab-btn-wishlist" onclick="switchTab('wishlist')">
         <i class="bi bi-heart-fill"></i> Wishlist
         <span class="tab-badge" id="wishlist-tab-count">0</span>
@@ -92,32 +89,13 @@
         <i class="bi bi-robot"></i> AI Chat
         <span class="badge badge-new ms-1">NEW</span>
       </button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════ GLOBAL SEARCH BAR ══ -->
-<div class="global-search-bar">
-  <div class="container-fluid px-3 px-md-4">
-    <div class="d-flex gap-2 align-items-center flex-wrap">
-      <span class="global-search-label">
-        <i class="bi bi-plus-circle-fill me-1"></i>Add to Watchlist:
-      </span>
-      <div class="wishlist-input-wrap">
-        <input type="text" id="wishlist-input"
-               class="wishlist-input"
-               placeholder="Symbol or name e.g. INFY or Infosys"
-               oninput="onSearchInput()"
-               onkeydown="handleSearchKey(event)"
-               autocomplete="off" />
-        <div id="search-suggestions" class="search-suggestions d-none"></div>
-      </div>
-      <button class="btn-wish-add" onclick="addToWishlistManual()">
-        Add
+      <button class="main-tab-btn" id="tab-btn-portfolio" onclick="switchTab('portfolio')">
+        <i class="bi bi-briefcase-fill"></i> My Portfolio
       </button>
     </div>
   </div>
 </div>
+
 
 <!-- ══════════════════════════════════════════════ MAIN CONTENT ══ -->
 <main class="container-fluid px-3 px-md-4 mt-3">
@@ -150,6 +128,24 @@
       <div class="row g-3 mb-4" id="summary-cards"></div>
     </div>
 
+    <!-- Free-form NSE stock search -->
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3" id="stock-search-row">
+      <span class="fw-semibold text-muted" style="white-space:nowrap">
+        🔍 Analyse any NSE stock:
+      </span>
+      <div style="position:relative; flex:1; max-width:360px;">
+        <input type="text" id="stock-search-input" class="form-control form-control-sm"
+               placeholder="e.g. ADANIENT, ITC, HINDUNILVR, BAJAJ-AUTO"
+               oninput="onStockSearchInput()"
+               onkeydown="if(event.key==='Enter')analyseCustomStock()"
+               autocomplete="off">
+        <div id="stock-search-suggestions" class="search-suggestions d-none"></div>
+      </div>
+      <button class="btn btn-primary btn-sm px-3" onclick="analyseCustomStock()">Analyse</button>
+    </div>
+    <!-- Search result card (hidden until a search is performed) -->
+    <div id="search-result-container" class="mb-3" style="display:none"></div>
+
     <!-- Stock grid -->
     <div id="stocks-section" class="d-none">
       <div class="section-header mb-3">
@@ -177,120 +173,6 @@
     <div id="news-grid" class="row g-3 mb-5"></div>
 
   </div><!-- /tab-intraday -->
-
-
-  <!-- ════════════════════════════ TAB: OPTIONS ════════════════════════════ -->
-  <div id="tab-options" class="tab-panel d-none">
-
-    <!-- Instrument selector -->
-    <div class="options-toolbar mb-4">
-      <h2 class="section-title mb-3">
-        <i class="bi bi-layers-fill me-2"></i>Options Chain Analysis
-      </h2>
-      <div class="d-flex flex-wrap gap-2 align-items-center">
-        <span class="fw-semibold me-1">Select Instrument:</span>
-        <button class="btn-instrument active" id="inst-NIFTY"     onclick="loadOptions('NIFTY')">Nifty 50</button>
-        <button class="btn-instrument"        id="inst-BANKNIFTY" onclick="loadOptions('BANKNIFTY')">Bank Nifty</button>
-        <button class="btn-instrument"        id="inst-RELIANCE"  onclick="loadOptions('RELIANCE')">Reliance</button>
-        <button class="btn-instrument"        id="inst-TCS"       onclick="loadOptions('TCS')">TCS</button>
-        <button class="btn-instrument"        id="inst-INFY"      onclick="loadOptions('INFY')">Infosys</button>
-        <button class="btn-instrument"        id="inst-HDFCBANK"  onclick="loadOptions('HDFCBANK')">HDFC Bank</button>
-        <button class="btn-instrument"        id="inst-ICICIBANK" onclick="loadOptions('ICICIBANK')">ICICI Bank</button>
-      </div>
-    </div>
-
-    <!-- Options loading -->
-    <div id="options-loading" class="text-center py-5 d-none">
-      <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
-      <p class="mt-3 fs-5 text-muted">Fetching option chain data…</p>
-    </div>
-
-    <!-- Options error -->
-    <div id="options-error" class="d-none">
-      <div class="alert alert-danger d-flex align-items-center gap-3 fs-5">
-        <i class="bi bi-wifi-off fs-3"></i>
-        <div>
-          <strong>Could not load options data.</strong><br>
-          Please check your internet connection and try again.
-        </div>
-      </div>
-    </div>
-
-    <!-- Options result -->
-    <div id="options-result" class="d-none">
-
-      <!-- Signal banner -->
-      <div class="options-signal-banner mb-4" id="options-signal-banner">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-          <div>
-            <div class="options-instrument-name" id="options-instrument-name"></div>
-            <div class="options-spot-price" id="options-spot-price"></div>
-          </div>
-          <div class="ms-auto text-end">
-            <div class="options-signal-label" id="options-signal-label"></div>
-            <div class="options-expiry" id="options-expiry"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AI Explanation -->
-      <div class="explanation-box mb-4">
-        <h5><i class="bi bi-robot me-2"></i>What the AI says</h5>
-        <p id="options-explanation" class="fs-5 mb-0"></p>
-      </div>
-
-      <!-- Key metrics cards -->
-      <div class="row g-3 mb-4" id="options-metrics"></div>
-
-      <!-- Reasons list -->
-      <div class="mb-4">
-        <h5><i class="bi bi-list-check me-2"></i>Why this signal?</h5>
-        <ul class="reasons-list" id="options-reasons"></ul>
-      </div>
-
-      <!-- Option chain table -->
-      <div class="chain-table-wrapper mb-5">
-        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-          <h5 class="mb-0"><i class="bi bi-table me-2"></i>Option Chain
-            <span class="badge bg-secondary ms-2 fs-6" id="options-chain-label"></span>
-          </h5>
-          <button class="btn btn-sm btn-outline-secondary" id="greeks-toggle-btn"
-                  onclick="toggleGreeks()" data-active="0">
-            <i class="bi bi-calculator me-1"></i>Show Greeks &amp; OI Change
-          </button>
-        </div>
-        <div class="table-responsive">
-          <table class="table options-table" id="options-chain-table">
-            <thead>
-              <tr>
-                <th class="call-col">CALL OI</th>
-                <th class="call-col oi-change-col">OI Chg</th>
-                <th class="call-col">CALL LTP</th>
-                <th class="call-col">CALL IV %</th>
-                <th class="call-col greek-col">Δ Delta</th>
-                <th class="call-col greek-col">Θ Theta/d</th>
-                <th class="strike-col">STRIKE</th>
-                <th class="put-col greek-col">Θ Theta/d</th>
-                <th class="put-col greek-col">Δ Delta</th>
-                <th class="put-col">PUT IV %</th>
-                <th class="put-col">PUT LTP</th>
-                <th class="put-col oi-change-col">OI Chg</th>
-                <th class="put-col">PUT OI</th>
-              </tr>
-            </thead>
-            <tbody id="options-chain-body"></tbody>
-          </table>
-        </div>
-        <p class="text-muted small mt-2">
-          <i class="bi bi-info-circle me-1"></i>
-          ATM = At The Money (★). OI = Open Interest. LTP = Last Traded Price. IV = Implied Volatility.
-          Delta &amp; Theta use Black-Scholes (approximate). Greeks hidden by default — click button to show.
-        </p>
-      </div>
-
-    </div><!-- /options-result -->
-
-  </div><!-- /tab-options -->
 
 
   <!-- ════════════════════════════ TAB: WISHLIST ════════════════════════════ -->
@@ -332,20 +214,127 @@
         <i class="bi bi-robot me-2 text-primary"></i>
         AI Trading Assistant
       </h2>
-      <p class="text-muted mb-0 fs-6">
-        Ask anything about Indian stocks — powered by AWS Bedrock + Claude Haiku.
-        The AI uses live technical analysis and news sentiment to answer your questions.
-      </p>
     </div>
 
     <!-- Suggested questions -->
     <div class="chat-suggestions mb-3" id="chat-suggestions">
       <span class="suggestions-label text-muted me-2">Try:</span>
       <button class="btn-suggestion" onclick="sendSuggestion('Should I buy TCS today?')">Should I buy TCS today?</button>
-      <button class="btn-suggestion" onclick="sendSuggestion('Analyse NIFTY options chain')">Analyse NIFTY options chain</button>
+      <button class="btn-suggestion" onclick="sendSuggestion('Which stocks have the best momentum right now?')">Which stocks have best momentum?</button>
       <button class="btn-suggestion" onclick="sendSuggestion('Which stocks have the best momentum right now?')">Best momentum stocks?</button>
       <button class="btn-suggestion" onclick="sendSuggestion('Is INFY overbought?')">Is INFY overbought?</button>
     </div>
+
+    <!-- ── Trend & Signal Guide (collapsed by default) ── -->
+    <div class="signal-guide-wrap mb-3" id="signal-guide">
+
+      <button class="signal-guide-toggle" type="button"
+        data-bs-toggle="collapse" data-bs-target="#signal-guide-body"
+        aria-expanded="false" aria-controls="signal-guide-body">
+        <span class="signal-guide-toggle-left">
+          <i class="bi bi-book-half me-2"></i>
+          <strong>Trend &amp; Signal Guide</strong>
+          <span class="signal-guide-hint ms-2">— what do these terms mean?</span>
+        </span>
+        <i class="bi bi-chevron-down signal-guide-chevron"></i>
+      </button>
+
+      <div class="collapse" id="signal-guide-body">
+        <div class="signal-guide-body">
+
+          <!-- Row 1: Signal Labels + Trend/Sentiment -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <div class="guide-card">
+                <div class="guide-card-header"><i class="bi bi-flag-fill me-2"></i>Signal Labels (AI Score)</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-sbuy">STRONG BUY</span><span class="guide-desc">Score &gt; 70 — high-confidence buy</span></li>
+                  <li><span class="guide-badge guide-buy">BUY</span><span class="guide-desc">Score 55–70 — moderate buy signal</span></li>
+                  <li><span class="guide-badge guide-hold">HOLD</span><span class="guide-desc">Score 40–55 — wait, no clear direction</span></li>
+                  <li><span class="guide-badge guide-sell">SELL</span><span class="guide-desc">Score 25–40 — moderate sell signal</span></li>
+                  <li><span class="guide-badge guide-ssell">STRONG SELL</span><span class="guide-desc">Score &lt; 25 — high-confidence sell</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="guide-card">
+                <div class="guide-card-header"><i class="bi bi-graph-up-arrow me-2"></i>Trend &amp; Sentiment</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">Bullish</span><span class="guide-desc">Uptrend — buyers in control; positive news</span></li>
+                  <li><span class="guide-badge guide-sell">Bearish</span><span class="guide-desc">Downtrend — sellers in control; negative news</span></li>
+                  <li><span class="guide-badge guide-hold">Neutral</span><span class="guide-desc">Sideways / ranging — mixed signals or news</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 2: RSI + MACD -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <div class="guide-card">
+                <div class="guide-card-header"><i class="bi bi-speedometer2 me-2"></i>RSI (Relative Strength Index)</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">RSI &lt; 30</span><span class="guide-desc">Oversold — potential bounce up (buy signal)</span></li>
+                  <li><span class="guide-badge guide-hold">RSI 30–70</span><span class="guide-desc">Normal range — no extreme pressure</span></li>
+                  <li><span class="guide-badge guide-sell">RSI &gt; 70</span><span class="guide-desc">Overbought — potential pullback (sell signal)</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="guide-card">
+                <div class="guide-card-header"><i class="bi bi-bar-chart-steps me-2"></i>MACD</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">Above signal line ▲</span><span class="guide-desc">Bullish momentum — upward crossover</span></li>
+                  <li><span class="guide-badge guide-sell">Below signal line ▼</span><span class="guide-desc">Bearish momentum — downward crossover</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: EMA + Bollinger Bands + ADX + Risk -->
+          <div class="row g-3">
+            <div class="col-md-6 col-lg-3">
+              <div class="guide-card h-100">
+                <div class="guide-card-header"><i class="bi bi-intersect me-2"></i>EMA Crossover</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">EMA9 &gt; EMA21</span><span class="guide-desc">Short-term uptrend</span></li>
+                  <li><span class="guide-badge guide-sell">EMA9 &lt; EMA21</span><span class="guide-desc">Short-term downtrend</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <div class="guide-card h-100">
+                <div class="guide-card-header"><i class="bi bi-distribute-vertical me-2"></i>Bollinger Bands</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">Near lower band</span><span class="guide-desc">Potential bounce upward</span></li>
+                  <li><span class="guide-badge guide-sell">Near upper band</span><span class="guide-desc">Potential pullback downward</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <div class="guide-card h-100">
+                <div class="guide-card-header"><i class="bi bi-reception-4 me-2"></i>ADX (Trend Strength)</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-buy">ADX &gt; 25</span><span class="guide-desc">Strong, tradeable trend</span></li>
+                  <li><span class="guide-badge guide-hold">ADX &lt; 20</span><span class="guide-desc">Weak / ranging — signals less reliable</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <div class="guide-card h-100">
+                <div class="guide-card-header"><i class="bi bi-shield-half me-2"></i>Risk Level</div>
+                <ul class="guide-list">
+                  <li><span class="guide-badge guide-risk-low">LOW</span><span class="guide-desc">Low volatility — calmer trade</span></li>
+                  <li><span class="guide-badge guide-risk-med">MEDIUM</span><span class="guide-desc">Normal volatility — standard caution</span></li>
+                  <li><span class="guide-badge guide-risk-high">HIGH</span><span class="guide-desc">High volatility — always use stop-losses</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /signal-guide-wrap -->
 
     <!-- Chat messages window -->
     <div class="chat-window" id="chat-window">
@@ -386,6 +375,57 @@
     </div>
 
   </div><!-- /tab-chat -->
+
+  <!-- ════════════════════════ TAB: MY PORTFOLIO ════════════════════════ -->
+  <div id="tab-portfolio" class="tab-panel d-none">
+
+    <div class="section-header mb-3 d-flex justify-content-between align-items-center">
+      <h2 class="section-title">
+        <i class="bi bi-briefcase-fill me-2 text-primary"></i>My Portfolio
+      </h2>
+      <button class="btn-action btn-refresh" onclick="openAddPortModal('','',0,null)">
+        <i class="bi bi-plus-circle-fill me-1"></i> Add Stock
+      </button>
+    </div>
+
+    <!-- Loading -->
+    <div id="portfolio-loading" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
+      <p class="mt-3 text-muted">Loading your portfolio…</p>
+    </div>
+
+    <!-- Empty state -->
+    <div id="portfolio-empty" class="d-none text-center py-5">
+      <i class="bi bi-briefcase fs-1 text-muted mb-3 d-block"></i>
+      <p class="text-muted fs-5">No holdings yet.</p>
+      <p class="text-muted">Click <strong>Add Stock</strong> above, or use the
+        <strong>Add to Portfolio</strong> button on any stock card.</p>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="row g-3 mb-4" id="portfolio-summary"></div>
+
+    <!-- Holdings table -->
+    <div class="port-table-wrap">
+      <table class="port-table">
+        <thead>
+          <tr>
+            <th>Stock</th>
+            <th>Buy Price</th>
+            <th>CMP</th>
+            <th>Qty</th>
+            <th>Invested</th>
+            <th>Curr. Value</th>
+            <th>Day P&amp;L</th>
+            <th>Total P&amp;L</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="portfolio-table-body"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /tab-portfolio -->
 
 </main>
 
@@ -446,18 +486,51 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════ FOOTER ══ -->
-<footer class="app-footer mt-5 py-3 text-center text-muted small">
-  AI Trading Assistant &nbsp;|&nbsp; Built with Python + FastAPI + Yahoo Finance
-  &nbsp;|&nbsp; Data refreshes every 5 minutes
-  &nbsp;|&nbsp; <strong>Not financial advice</strong>
-</footer>
 
 <!-- Global toast — lives outside tab panels so it shows from any tab -->
+<!-- ══════════════════════════════════════ ADD TO PORTFOLIO MODAL ══ -->
+<div class="modal fade" id="addPortModal" tabindex="-1" aria-labelledby="addPortModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a237e,#283593);color:#fff;">
+        <h5 class="modal-title" id="addPortModalLabel">
+          <i class="bi bi-plus-circle-fill me-2"></i>Add to Portfolio
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="port-symbol" />
+        <div class="mb-3">
+          <label class="form-label fw-bold text-muted small">STOCK</label>
+          <div id="port-name" class="fw-bold fs-6"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold text-muted small" for="port-buy-price">BUY PRICE (₹)</label>
+          <input type="number" id="port-buy-price" class="form-control" step="0.01" min="0.01" placeholder="e.g. 2800.00"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold text-muted small" for="port-qty">QUANTITY (shares)</label>
+          <input type="number" id="port-qty" class="form-control" min="1" value="1"/>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-bold text-muted small" for="port-buy-date">BUY DATE</label>
+          <input type="date" id="port-buy-date" class="form-control"/>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="addHolding()">
+          <i class="bi bi-plus-circle me-1"></i>Add Holding
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="wishlist-toast" class="wishlist-toast d-none"></div>
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/app.js?v=6"></script>
+<script src="/js/app.js?v=8"></script>
 </body>
 </html>

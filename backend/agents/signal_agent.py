@@ -89,6 +89,30 @@ class SignalAgent:
             # ── Plain-English explanation ─────────────────
             explanation = self._explain(signal, tech_reasons + sent_reasons, name)
 
+            # ── Target / stop-loss prices ─────────────────
+            # We re-use TechnicalAgent's static helpers on the same hist data.
+            # No changes to technical_agent.py needed — static methods are
+            # callable on the class directly.
+            _close = hist["Close"]
+            _bb_upper, _bb_mid, _bb_lower = TechnicalAgent._bollinger(_close)
+            _atr = TechnicalAgent._atr(hist["High"], hist["Low"], _close)
+
+            target_price     = None
+            stop_loss        = None
+            target_buy_price = None
+
+            if _atr and _bb_upper and _bb_lower:
+                if signal == "STRONG BUY":
+                    target_price     = round(min(_bb_upper, current_price + 2.5 * _atr), 2)
+                    stop_loss        = round(max(_bb_lower, current_price - 1.5 * _atr), 2)
+                elif signal == "BUY":
+                    target_price     = round(min(_bb_upper, current_price + 1.5 * _atr), 2)
+                    stop_loss        = round(max(_bb_lower, current_price - 1.0 * _atr), 2)
+                elif signal == "SELL":
+                    target_buy_price = round(max(_bb_lower, current_price - 1.5 * _atr), 2)
+                elif signal == "STRONG SELL":
+                    target_buy_price = round(max(_bb_lower, current_price - 2.5 * _atr), 2)
+
             # ── Intraday chart data ───────────────────────
             intraday = stock_data.get("intraday", [])
 
@@ -115,8 +139,11 @@ class SignalAgent:
                 "risk":          risk_label,
                 "risk_color":    risk_color,
                 "explanation":   explanation,
-                "reasons":       (tech_reasons + sent_reasons)[:6],
-                "intraday":      intraday,
+                "reasons":           (tech_reasons + sent_reasons)[:6],
+                "intraday":          intraday,
+                "target_price":      target_price,
+                "stop_loss":         stop_loss,
+                "target_buy_price":  target_buy_price,
             }
 
         except Exception as e:
