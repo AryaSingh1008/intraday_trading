@@ -1,46 +1,82 @@
-# ============================================================
+# =============================================================================
 # AI Intraday Trading Assistant - Python Dependencies
-# All FREE, no paid API keys required for basic use
-# ============================================================
+# For: Backend agents, Lambda functions, Local FastAPI development
+# All FREE - no paid API keys required
+# =============================================================================
 
-# Web Framework
+# ─────────────────────────────────────────────────────────────────────────────
+# CORE: Web Framework (FastAPI - local development only)
+# ─────────────────────────────────────────────────────────────────────────────
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 aiofiles>=23.2.1
 python-multipart>=0.0.6
-
-# Stock Market Data (FREE - Yahoo Finance)
-yfinance>=0.2.31
-
-# Data Processing
-pandas>=2.1.3
-numpy>=1.25.2
-
-# Technical Analysis Indicators
-ta>=0.11.0
-
-# AI/NLP Sentiment Analysis (FREE - runs locally)
-vaderSentiment>=3.3.2
-
-# News Fetching via RSS (FREE - no API key needed)
-feedparser>=6.0.11
-
-# Excel Export
-openpyxl>=3.1.2
-
-# HTTP Requests
-requests>=2.31.0
 httpx>=0.25.2
 
-# Timezone Support
-pytz>=2023.3
+# ─────────────────────────────────────────────────────────────────────────────
+# AWS: Cloud Services (Lambda, Bedrock, DynamoDB)
+# ─────────────────────────────────────────────────────────────────────────────
+boto3>=1.34.0          # AWS SDK
+botocore>=1.34.0       # AWS SDK core
 
-# HTML Parsing
-beautifulsoup4>=4.12.2
+# ─────────────────────────────────────────────────────────────────────────────
+# MARKET DATA: Stock & Options
+# ─────────────────────────────────────────────────────────────────────────────
+yfinance>=0.2.31       # Yahoo Finance (OHLCV, real-time prices)
+pandas>=2.1.3          # Data processing
+numpy>=1.25.2          # Numerical computing
 
-# Browser automation (NSE option chain scraping — bypasses Akamai bot protection)
-playwright>=1.40.0
-# After installing, run: playwright install chrome
+# ─────────────────────────────────────────────────────────────────────────────
+# TECHNICAL ANALYSIS: Indicators
+# ─────────────────────────────────────────────────────────────────────────────
+ta>=0.11.0             # RSI, MACD, Bollinger, EMA, ADX, Stochastic, etc.
 
-# TLS fingerprint mimicking (alternative NSE access method)
-curl_cffi>=0.5.10
+# ─────────────────────────────────────────────────────────────────────────────
+# AI/NLP: Sentiment Analysis (100% offline - no API keys)
+# ─────────────────────────────────────────────────────────────────────────────
+vaderSentiment>=3.3.2  # VADER sentiment analysis
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEWS: RSS Feeds & Web Scraping
+# ─────────────────────────────────────────────────────────────────────────────
+feedparser>=6.0.11     # RSS feed parser (Google News, Economic Times, etc.)
+beautifulsoup4>=4.12.2 # HTML parsing (NSE options fallback)
+requests>=2.31.0       # HTTP requests
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTIONS CHAIN SCRAPING: NSE India
+# ─────────────────────────────────────────────────────────────────────────────
+playwright>=1.40.0     # Browser automation (NSE chain - bypasses bot protection)
+# After install: playwright install chrome
+curl_cffi>=0.5.10      # TLS fingerprint spoofing (alternative NSE access)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPORT: Excel Reports
+# ─────────────────────────────────────────────────────────────────────────────
+openpyxl>=3.1.2        # Excel file creation (.xlsx)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UTILITIES: Timezone, Caching, Logging
+# ─────────────────────────────────────────────────────────────────────────────
+pytz>=2023.3           # Timezone support (IST for NSE)
+python-dotenv>=1.0.0   # .env file loading (AWS secrets fallback)
+
+# =============================================================================
+# OPTIONAL DEVELOPMENT DEPENDENCIES
+# =============================================================================
+# Uncomment below only if running locally with `python run.py`:
+# (These are baked into Lambda Layers during deployment)
+
+# pytest>=7.4.0          # Testing framework
+# black>=23.10.0         # Code formatting
+# flake8>=6.1.0          # Linting
+# mypy>=1.6.0            # Type checking
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - AWS Bedrock: Claude 3.5 Haiku (used via boto3 - no SDK install needed)
+# - Lambda Layers: Large deps (pandas, numpy, ta, VADER) pre-bundled
+# - No paid APIs: All data from free sources (yfinance, NSE, RSS)
+# - Cost: ~$2–5/month on AWS (serverless, no fixed infrastructure)
+# =============================================================================

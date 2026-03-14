@@ -1,239 +1,111 @@
-# 📈 AI Intraday Trading Assistant
+# 📈 AI-Powered Intraday Trading Assistant
 
-A simplified, senior-friendly AI-powered stock analysis tool.
-Built with **100% free tools** — no paid API keys required for basic use.
+**Real-time NSE/BSE stock analysis with institutional-grade AI signals.**
+
+A fully serverless cloud platform combining technical analysis, news sentiment, and AI-powered recommendations. Deployed on AWS with 100% uptime, zero infrastructure overhead, and pay-as-you-go pricing (~$2–5/month).
 
 > ⚠️ **Disclaimer:** This tool is for **educational purposes only**.
-> Trading involves risk and you may lose money.
-> Always consult a financial advisor before investing real money.
+> Trading involves risk and you may lose money. Always consult a financial advisor before investing real money.
 
 ---
 
-## 🏗️ Architecture Diagram
+## 🎯 Key Features
+
+✅ **43 NIFTY 50 Stocks** — Real-time BUY/SELL/HOLD signals (refreshed every 5 min)
+✅ **AI Chat Interface** — Ask in plain English, get institutional analysis
+✅ **Portfolio Tracker** — Track holdings with live P&L (day + total gain)
+✅ **Wishlist/Watchlist** — Bookmark stocks, persisted across sessions
+✅ **Market News** — Real-time sentiment (bullish/bearish labels)
+✅ **Excel Export** — Download full analysis for all 43 stocks
+✅ **Zero Server Costs** — 100% serverless (scales to $0 when market closed)
+✅ **100% Free Data** — yfinance, NSE, Google News RSS (no paid APIs)
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                    AI INTRADAY TRADING ASSISTANT                     │
-│                      Complete Architecture                           │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                    AWS SERVERLESS STACK                        │
+└────────────────────────────────────────────────────────────────┘
 
-         Your Dad's Browser (http://localhost:8000)
-         ┌────────────────────────────────────────┐
-         │           FRONTEND  (UI)               │
-         │                                        │
-         │  ┌─────────┐  ┌─────────┐  ┌───────┐  │
-         │  │ Dashboard│  │ Stock   │  │ News  │  │
-         │  │ Summary  │  │ Cards   │  │ Feed  │  │
-         │  │ (counts) │  │BUY/SELL │  │Senti- │  │
-         │  │          │  │  HOLD   │  │ment   │  │
-         │  └─────────┘  └─────────┘  └───────┘  │
-         │                                        │
-         │  🟢 STRONG BUY   🟢 BUY                │
-         │  🟡 HOLD         🔴 SELL               │
-         │  🔴 STRONG SELL                         │
-         │                                        │
-         │  [Refresh]  [Export Excel]             │
-         └─────────────────┬──────────────────────┘
-                           │  HTTP / REST API
-                           ▼
-         ┌────────────────────────────────────────┐
-         │         BACKEND  (FastAPI / Python)    │
-         │                                        │
-         │  REST Endpoints:                       │
-         │  GET /api/stocks?market=IN             │
-         │  GET /api/stock/{symbol}               │
-         │  GET /api/news                         │
-         │  GET /api/export  (→ Excel file)       │
-         │  GET /api/market-status                │
-         │                                        │
-         │  ┌─────────────────────────────────┐  │
-         │  │         AI AGENTS               │  │
-         │  │                                 │  │
-         │  │  ┌──────────────────────────┐   │  │
-         │  │  │  1. Technical Agent      │   │  │
-         │  │  │  ─────────────────────── │   │  │
-         │  │  │  • RSI (14-period)       │   │  │
-         │  │  │  • MACD (12,26,9)        │   │  │
-         │  │  │  • Bollinger Bands (20)  │   │  │
-         │  │  │  • SMA 20 & SMA 50       │   │  │
-         │  │  │  • Volume Ratio          │   │  │
-         │  │  │  Output: Score 0–100     │   │  │
-         │  │  └──────────┬───────────────┘   │  │
-         │  │             │ 70% weight         │  │
-         │  │  ┌──────────▼───────────────┐   │  │
-         │  │  │  2. Sentiment Agent      │   │  │
-         │  │  │  ─────────────────────── │   │  │
-         │  │  │  • Google News RSS Feed  │   │  │
-         │  │  │  • Yahoo Finance RSS     │   │  │
-         │  │  │  • VADER NLP (offline)   │   │  │
-         │  │  │  Output: Score -50…+50   │   │  │
-         │  │  └──────────┬───────────────┘   │  │
-         │  │             │ 30% weight         │  │
-         │  │  ┌──────────▼───────────────┐   │  │
-         │  │  │  3. Signal Agent         │   │  │
-         │  │  │  ─────────────────────── │   │  │
-         │  │  │  Combines both scores:   │   │  │
-         │  │  │  final = tech*0.7        │   │  │
-         │  │  │        + sentiment*0.3   │   │  │
-         │  │  │                          │   │  │
-         │  │  │  > 70  → STRONG BUY 🟢🟢 │   │  │
-         │  │  │  55-70 → BUY        🟢   │   │  │
-         │  │  │  40-55 → HOLD       🟡   │   │  │
-         │  │  │  25-40 → SELL       🔴   │   │  │
-         │  │  │  < 25  → STRONG SELL🔴🔴 │   │  │
-         │  │  └──────────────────────────┘   │  │
-         │  └─────────────────────────────────┘  │
-         │                                        │
-         │  ┌─────────────────────────────────┐  │
-         │  │       UTILITIES                 │  │
-         │  │  • Excel Exporter (openpyxl)    │  │
-         │  │  • 5-minute cache (in-memory)   │  │
-         │  └─────────────────────────────────┘  │
-         └─────────────────┬──────────────────────┘
-                           │  HTTP (yfinance / feedparser)
-                           ▼
-         ┌────────────────────────────────────────┐
-         │    FREE EXTERNAL DATA SOURCES          │
-         │                                        │
-         │  📊 Yahoo Finance  ──── yfinance lib   │
-         │     (Real-time prices, OHLCV data)     │
-         │     No API key needed!                 │
-         │                                        │
-         │  📰 Google News RSS ─── feedparser lib │
-         │     (Latest headlines, no key needed)  │
-         │                                        │
-         │  🧠 VADER Sentiment ─── offline NLP    │
-         │     (Runs 100% on your computer)       │
-         └────────────────────────────────────────┘
+  👤 Browser (Chrome/Mobile)
+         │
+         ↓ HTTPS
+  ┌──────────────────┐
+  │ CloudFront CDN   │  (Singapore PoP, HTTP/2 + HTTP/3)
+  └────┬──────┬──────┘
+       │      │
+  Static │     │ API calls
+  files  │     │ /api/*
+    ↓    │     ↓
+  ┌────┐ │  ┌──────────────────┐
+  │ S3 │ │  │ API Gateway      │
+  │SPA │ │  │ (15 routes)      │
+  └────┘ │  └────────┬─────────┘
+         │           │
+         │           ↓
+         │      ┌─────────────┐
+         │      │13 Lambdas:  │
+         │      │• stocks     │
+         │      │• options    │
+         │      │• news       │
+         │      │• portfolio  │
+         │      │• bedrock    │
+         │      │  (AI chat)  │
+         │      └──┬──┬──┬────┘
+         │         │  │  │
+  ┌──────┼─────────┘  │  │
+  │      │            │  │
+  ↓      ↓            ↓  ↓
+[DynamoDB] [Bedrock] [yfinance] [RSS feeds]
+- cache      Claude    prices      6 sources
+- wishlist   3.5 H     NSE opts    sentiment
+- portfolio  Aiken
+- iv-hist.
 ```
 
 ---
 
-## 🛠️ Tech Stack (All FREE)
+## 🛠️ Tech Stack
 
-| Component | Technology | Why Free? |
-|-----------|-----------|-----------|
-| **Language** | Python 3.10+ | Open-source |
-| **Backend** | FastAPI | Open-source |
-| **Stock Data** | yfinance | Yahoo Finance (free) |
-| **Technical Analysis** | pandas + numpy | Open-source |
-| **AI/NLP Sentiment** | VADER | Free NLP library |
-| **News** | Google News RSS | Free RSS feed |
-| **Frontend** | HTML + Bootstrap 5 | Open-source CDN |
-| **Charts** | Chart.js | Open-source CDN |
-| **Excel Export** | openpyxl | Open-source |
-| **Hosting (local)** | uvicorn | Open-source |
+| Layer | Technology | Service |
+|-------|-----------|---------|
+| **Frontend** | HTML5 + Bootstrap 5 + Chart.js | S3 + CloudFront |
+| **Backend** | 13 Lambda functions (Python) | AWS Lambda |
+| **Database** | NoSQL, serverless, auto-scale | DynamoDB |
+| **AI/Chat** | Claude 3.5 Haiku (tool-use) | AWS Bedrock |
+| **API** | HTTP v2, 15 routes | API Gateway |
+| **Data Sources** | yfinance, NSE, 6 RSS feeds | Free (no APIs) |
+| **IaC** | 10+ Terraform modules | Terraform |
+| **Monitoring** | Real-time logs | CloudWatch |
 
 ---
 
-## 🤖 AI Agents Explained
+## 📊 Signal Algorithm
 
-### Agent 1: Technical Analysis Agent
-Reads historical price data and calculates classic trading indicators:
-
-| Indicator | What it does | Scoring |
-|-----------|--------------|---------|
-| **RSI** | Measures if stock is overbought or oversold | <30 = BUY, >70 = SELL |
-| **MACD** | Shows momentum direction | Crossover up = BUY |
-| **Bollinger Bands** | Shows if price is at extremes | Near lower = BUY |
-| **SMA 20/50** | Trend direction | 20 > 50 = Uptrend |
-| **Volume** | Confirms price moves | High volume + up = BUY |
-
-### Agent 2: Sentiment Analysis Agent
-Reads news headlines from free RSS feeds and scores them using VADER NLP:
-- Positive news → Bullish signal
-- Negative news → Bearish signal
-- Mixed/neutral → No influence
-
-### Agent 3: Signal Agent (Master)
-Combines both agents with weighted scoring:
+**10 Technical Indicators:**
 ```
-Final Score = Technical Score × 70% + Sentiment Score × 30%
-```
-Generates plain-English explanations so anyone can understand the signal.
-
----
-
-## 📦 Free Datasets Available
-
-| Dataset | Access Method | Coverage |
-|---------|--------------|---------|
-| **Yahoo Finance** | `yfinance` Python library | Global stocks, real-time |
-| **NSE India** | `yfinance` with `.NS` suffix | All NSE-listed stocks |
-| **BSE India** | `yfinance` with `.BO` suffix | All BSE-listed stocks |
-| **Google News RSS** | `feedparser` | Real-time news headlines |
-| **Yahoo Finance RSS** | `feedparser` | US stock news |
-
----
-
-## 🚀 Installation & Setup
-
-### Step 1: Install Python
-Download Python 3.10 or newer from: https://www.python.org/downloads/
-
-### Step 2: Open Terminal/Command Prompt
-- **Windows**: Press `Win + R`, type `cmd`, press Enter
-- **Mac**: Press `Cmd + Space`, type `Terminal`, press Enter
-
-### Step 3: Navigate to Project Folder
-```bash
-cd /path/to/intraday_trading
+RSI (±20) | MACD (±15) | Bollinger (±15) | EMA (±15) | RSI Div (±12)
+SMA (±10) | Volume (±10) | ADX (±8) | Stochastic (±8)
 ```
 
-### Step 4: Install Dependencies
-```bash
-pip install -r requirements.txt
+**Sentiment Analysis from 6 RSS feeds:**
+- VADER NLP + finance domain lexicon
+- Recency weighting (fresh news > old)
+- Score: -50 (bearish) to +50 (bullish)
+
+**Final Score (Adaptive Weighting):**
 ```
+Score = Technical × (75%|65%|55%) + Sentiment × (25%|35%|45%)
 
-### Step 5: Run the Application
-```bash
-python run.py
+Thresholds:
+  > 70   → STRONG BUY   🟢🟢
+ 55–70   → BUY          🟢
+ 40–55   → HOLD         🟡
+ 25–40   → SELL         🔴
+  < 25   → STRONG SELL  🔴🔴
 ```
-
-### Step 6: Open Browser
-The browser will open automatically. If not, go to:
-```
-http://localhost:8000
-```
-
----
-
-## 📖 How to Use (For Dad)
-
-### Understanding the Dashboard
-
-**Traffic Light System:**
-- 🟢🟢 **STRONG BUY** — AI strongly recommends buying this stock
-- 🟢 **BUY** — Good signals to buy this stock
-- 🟡 **HOLD** — Not clear, wait and watch
-- 🔴 **SELL** — Signals suggest selling
-- 🔴🔴 **STRONG SELL** — AI strongly recommends selling
-
-**AI Score (0 to 100):**
-- Above 65 = Good for buying
-- 40 to 65 = Neutral, be careful
-- Below 35 = Consider selling
-
-**Risk Level:**
-- 🟢 LOW — Stable stock, less risky
-- 🟡 MEDIUM — Moderate risk
-- 🔴 HIGH — Volatile stock, higher risk
-
-### Step-by-Step Usage
-
-1. **Open the app** → Browser opens automatically at http://localhost:8000
-2. **Choose market** → Click "🇮🇳 Indian Stocks" or "🇺🇸 US Stocks"
-3. **Look for green cards** → These are the BUY signals
-4. **Click any stock card** → See detailed AI analysis
-5. **Read the explanation** → Written in simple English
-6. **Check the risk** → LOW risk is safer for conservative investors
-7. **Export to Excel** → Click "Export Excel" to save a spreadsheet
-
-### Important Rules
-1. Never invest more than you can afford to lose
-2. Always use stop-loss orders
-3. Don't invest based on a single signal — look at the full picture
-4. The market is unpredictable — even AI can be wrong!
 
 ---
 
@@ -241,93 +113,128 @@ http://localhost:8000
 
 ```
 intraday_trading/
-├── run.py                          ← START HERE (python run.py)
-├── requirements.txt                ← Python dependencies
-├── README.md                       ← This file
-│
-├── backend/
-│   ├── app.py                      ← FastAPI server + API routes
+├── README.md
+├── requirements.txt
+├── TradingPlatform_Presentation.pptx   ← 18-slide office deck
+
+├── backend/                            ← Agents (used in Lambda + local)
 │   ├── agents/
-│   │   ├── technical_agent.py      ← RSI, MACD, Bollinger Bands
-│   │   ├── sentiment_agent.py      ← News sentiment (VADER + RSS)
-│   │   └── signal_agent.py         ← Master signal combiner
+│   │   ├── technical_agent.py          ← 10 indicators
+│   │   ├── sentiment_agent.py          ← VADER + RSS
+│   │   ├── signal_agent.py             ← Orchestrator
+│   │   └── options_agent.py            ← NSE analysis
 │   ├── data/
-│   │   └── stock_fetcher.py        ← Yahoo Finance data fetcher
-│   └── utils/
-│       └── excel_exporter.py       ← Excel file creator
-│
-└── frontend/
-    ├── index.html                  ← Main web page
-    ├── css/
-    │   └── style.css               ← Styling
-    └── js/
-        └── app.js                  ← Frontend logic
+│   │   ├── stock_fetcher.py            ← yfinance
+│   │   ├── options_fetcher.py          ← NSE chain
+│   │   └── playwright_fetcher.py       ← Browser
+│   ├── utils/
+│   │   ├── excel_exporter.py
+│   │   ├── greeks.py
+│   │   ├── iv_history_store.py
+│   │   └── wishlist_store.py
+│   └── app.py                          ← FastAPI (local dev)
+
+├── frontend/                           ← SPA (S3 + CloudFront)
+│   ├── index.html                      ← 4 tabs
+│   ├── css/style.css
+│   └── js/app.js
+
+├── lambdas/                            ← AWS Lambda handlers
+│   ├── trading_stocks_signal/          ← Main engine
+│   ├── trading_options_analysis/
+│   ├── trading_news_sentiment/
+│   ├── trading_wishlist/
+│   ├── trading_portfolio/              ← NEW: Holdings tracker
+│   ├── trading_market_status/
+│   ├── trading_excel_export/
+│   ├── trading_cache_clear/
+│   ├── trading_bedrock_chat/           ← AI chat
+│   ├── trading_bedrock_technical_tool/
+│   ├── trading_bedrock_sentiment_tool/
+│   └── trading_bedrock_options_tool/
+
+└── infrastructure/                     ← Terraform IaC
+    ├── terraform/
+    │   ├── api_gateway.tf
+    │   ├── bedrock.tf
+    │   ├── cloudfront.tf
+    │   ├── dynamodb.tf
+    │   ├── eventbridge.tf
+    │   ├── iam.tf
+    │   ├── lambda_functions.tf
+    │   ├── lambda_layers.tf
+    │   ├── s3.tf
+    │   ├── terraform.tfvars            ← AWS account ID, region
+    │   ├── terraform.lock.hcl
+    │   └── variables.tf
+    └── layers/
+        ├── trading-backend-layer.zip
+        ├── trading-heavy-layer.zip     ← pandas, numpy, ta
+        ├── trading-nlp-layer.zip       ← VADER, feedparser
+        └── trading-export-layer.zip    ← openpyxl
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🚀 Deployment
 
-### Adding Custom Stocks
-Open `backend/app.py` and find `INDIAN_STOCKS` or `US_STOCKS` dictionaries.
-Add entries in the format:
-```python
-"SYMBOL.NS": "Company Name",    # For Indian NSE stocks
-"SYMBOL.BO": "Company Name",    # For Indian BSE stocks
-"SYMBOL":    "Company Name",    # For US stocks
+**Deploy to AWS:**
+```bash
+cd infrastructure/terraform
+terraform init
+terraform apply
 ```
 
-### Common Indian Stock Symbols
-| Symbol | Company |
-|--------|---------|
-| `RELIANCE.NS` | Reliance Industries |
-| `TCS.NS` | Tata Consultancy Services |
-| `INFY.NS` | Infosys |
-| `HDFCBANK.NS` | HDFC Bank |
-| `SBIN.NS` | State Bank of India |
-
-### Common US Stock Symbols
-| Symbol | Company |
-|--------|---------|
-| `AAPL` | Apple |
-| `MSFT` | Microsoft |
-| `GOOGL` | Alphabet/Google |
-| `TSLA` | Tesla |
-| `NVDA` | NVIDIA |
+**Cost:** $2–5/month @ moderate usage
+- Lambda: 1M calls/month FREE
+- DynamoDB: 25 RCU/WCU FREE
+- CloudFront: 1 TB/month FREE
+- S3: 5 GB FREE
+- API Gateway: 1M calls/month FREE
+- Bedrock: Pay per token
 
 ---
 
-## 🔮 Future Improvements (Cloud Hosting)
+## 🔒 Security
 
-When ready to move to cloud:
-
-1. **Database**: Replace in-memory cache with **PostgreSQL** or **Redis**
-2. **Model Upgrade**: Add **LSTM neural network** for price prediction
-3. **Better Data**: Add **Alpha Vantage** or **Polygon.io** for tick data
-4. **Hosting**: Deploy to **AWS / GCP / Azure** or **Render.com** (free tier)
-5. **Alerts**: Add SMS/email alerts via Twilio/SendGrid
-6. **Portfolio Tracker**: Track actual holdings and P&L
-7. **Paper Trading**: Test strategies without real money
-8. **Mobile App**: Convert to React Native for phone app
+✅ CloudFront-only entry point (S3 private)
+✅ IAM roles with least-privilege
+✅ DynamoDB: Lambda-only access
+✅ Pre-signed URLs (1-hour expiry)
+✅ No hardcoded credentials
+✅ Terraform state encrypted
 
 ---
 
-## 🆘 Troubleshooting
+## 📊 Key Functions
 
-| Problem | Solution |
-|---------|----------|
-| "No data" for a stock | Check internet connection; Yahoo Finance may be rate-limiting |
-| App won't start | Run `pip install -r requirements.txt` again |
-| Browser doesn't open | Manually go to http://localhost:8000 |
-| Slow loading | First load takes 20-30s; subsequent loads use 5-min cache |
-| Stock not found | Check symbol spelling; add `.NS` for Indian stocks |
+**SignalAgent.analyze()** — Master orchestrator calling TechnicalAgent + SentimentAgent in parallel
+**TechnicalAgent.analyze()** — Scores 10 indicators, returns 0–100
+**SentimentAgent.get_sentiment_score()** — VADER + finance lexicon on 6 RSS feeds
+**_detect_intent()** — Intent classifier with NSE aliases expansion (icici → ICICIBANK)
+**renderModalChart()** — 15-min intraday chart (Chart.js)
+**loadPortfolio()** — Fetch holdings, calculate live P&L
+
+---
+
+## 🔧 Local Development
+
+```bash
+pip install -r requirements.txt
+python run.py
+# Opens http://localhost:8000
+```
 
 ---
 
 ## 📞 Support
 
-For issues or feature requests, ask your son/daughter who set this up! 😊
+For issues, check:
+1. CloudWatch Lambda logs
+2. API Gateway metrics
+3. DynamoDB on-demand billing
+4. Bedrock token usage
 
 ---
 
-*Built with ❤️ for smarter, safer investing.*
+*Built with AWS, Python, AI, and ❤️ for smarter, safer investing.*
