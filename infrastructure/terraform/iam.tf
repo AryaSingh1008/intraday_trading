@@ -58,6 +58,7 @@ data "aws_iam_policy_document" "lambda_dynamodb" {
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.cache_table_name}",
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.wishlist_table_name}",
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.iv_history_table_name}",
+      "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.portfolio_table_name}",
     ]
   }
 }
@@ -185,9 +186,17 @@ resource "aws_iam_role" "bedrock_agent" {
 
 data "aws_iam_policy_document" "bedrock_agent_permissions" {
   statement {
-    effect    = "Allow"
-    actions   = ["bedrock:InvokeModel"]
-    resources = ["arn:aws:bedrock:${local.region}::foundation-model/${var.bedrock_model_id}"]
+    effect  = "Allow"
+    actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+    resources = [
+      # Amazon Nova Lite cross-region inference profile (primary model — no use-case form)
+      "arn:aws:bedrock:*:*:inference-profile/us.amazon.nova-lite-v1:0",
+      "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
+      # Claude Haiku (fallback / future — once Anthropic use-case form is submitted)
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-haiku-20240307-v1:0",
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0",
+      "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-3-5-haiku-20241022-v1:0",
+    ]
   }
   statement {
     effect    = "Allow"

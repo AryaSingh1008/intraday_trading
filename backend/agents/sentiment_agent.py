@@ -156,7 +156,7 @@ class SentimentAgent:
                 seen.add(key)
                 unique.append(item)
 
-        return unique[:15]
+        return unique[:20]
 
     def _score(self, symbol: str, company_name: str) -> tuple:
         """
@@ -209,9 +209,14 @@ class SentimentAgent:
                          company_name: str = "") -> List[str]:
         urls = []
 
-        # Google News – general Indian market
+        # Google News – NIFTY / NSE / BSE general
         urls.append(
-            "https://news.google.com/rss/search?q=stock+market+today&hl=en-IN&gl=IN&ceid=IN:en"
+            "https://news.google.com/rss/search?q=NIFTY+NSE+stock+market&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+
+        # Google News – Sensex / BSE India
+        urls.append(
+            "https://news.google.com/rss/search?q=Sensex+BSE+India+stocks+today&hl=en-IN&gl=IN&ceid=IN:en"
         )
 
         # Economic Times Markets – high-quality Indian financial news
@@ -227,6 +232,16 @@ class SentimentAgent:
         # Business Standard Markets – premium Indian business news
         urls.append(
             "https://www.business-standard.com/rss/markets-106.rss"
+        )
+
+        # Livemint Markets – reliable Indian financial news
+        urls.append(
+            "https://www.livemint.com/rss/markets"
+        )
+
+        # Google News – Indian stock trading & investing
+        urls.append(
+            "https://news.google.com/rss/search?q=India+stock+market+trading+investing&hl=en-IN&gl=IN&ceid=IN:en"
         )
 
         if symbol:

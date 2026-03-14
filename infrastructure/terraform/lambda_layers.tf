@@ -67,6 +67,13 @@ resource "aws_s3_object" "heavy_layer_zip" {
   key    = "layers/trading-heavy-layer.zip"
   source = "${local.layers_dir}/trading-heavy-layer.zip"
   etag   = filemd5("${local.layers_dir}/trading-heavy-layer.zip")
+
+  # S3 multipart-upload etag format (hash-N) differs from local filemd5(),
+  # causing a perpetual diff. Ignore after initial upload; re-upload manually
+  # if the layer ZIP content actually changes (rebuild + terraform apply -replace).
+  lifecycle {
+    ignore_changes = [etag]
+  }
 }
 
 # Convenience locals to get the layer ARN (or null if not built yet)

@@ -53,16 +53,16 @@ class TechnicalAgent:
             if rsi is not None:
                 if rsi < 30:
                     score += 20
-                    reasons.append(f"RSI is {rsi:.0f} — stock is oversold (good buying opportunity)")
+                    reasons.append(f"RSI is {rsi:.0f} — oversold zone (below 30)")
                 elif rsi < 40:
                     score += 10
-                    reasons.append(f"RSI is {rsi:.0f} — slightly oversold (mild buy signal)")
+                    reasons.append(f"RSI is {rsi:.0f} — slightly oversold (30–40)")
                 elif rsi > 70:
                     score -= 20
-                    reasons.append(f"RSI is {rsi:.0f} — stock is overbought (consider selling)")
+                    reasons.append(f"RSI is {rsi:.0f} — overbought zone (above 70)")
                 elif rsi > 60:
                     score -= 10
-                    reasons.append(f"RSI is {rsi:.0f} — slightly overbought (mild sell signal)")
+                    reasons.append(f"RSI is {rsi:.0f} — slightly overbought (60–70)")
                 else:
                     reasons.append(f"RSI is {rsi:.0f} — neutral zone")
 
@@ -109,16 +109,16 @@ class TechnicalAgent:
                     pos = (current_price - lower) / band_width   # 0 = at lower, 1 = at upper
                     if current_price <= lower:
                         score += 15
-                        reasons.append("Price is at/below lower Bollinger Band — potential bounce up")
+                        reasons.append("Price is at/below lower Bollinger Band — at lower support")
                     elif current_price >= upper:
                         score -= 15
-                        reasons.append("Price is at/above upper Bollinger Band — potential pullback")
+                        reasons.append("Price is at/above upper Bollinger Band — at upper resistance")
                     elif pos < 0.3:
                         score += 8
-                        reasons.append("Price is near lower Bollinger Band — mild buy signal")
+                        reasons.append("Price is near lower Bollinger Band — close to lower support")
                     elif pos > 0.7:
                         score -= 8
-                        reasons.append("Price is near upper Bollinger Band — mild sell signal")
+                        reasons.append("Price is near upper Bollinger Band — close to upper resistance")
 
             # ── 4.  Moving Averages (SMA 20 & SMA 50) ────────
             if len(close) >= 50:

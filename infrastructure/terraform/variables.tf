@@ -25,7 +25,8 @@ variable "environment" {
 variable "bedrock_model_id" {
   description = "Bedrock foundation model for the agent"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  # Use cross-region inference profile for Claude 3.5 Haiku — no use-case form required
+  default     = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 }
 
 variable "lambda_layers_built" {

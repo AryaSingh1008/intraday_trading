@@ -51,9 +51,6 @@ resource "aws_scheduler_schedule" "stocks_refresh" {
   schedule_expression          = "rate(5 minutes)"
   schedule_expression_timezone = "Asia/Kolkata"
 
-  # Only run during Indian market hours (Mon–Fri, 9:00–15:45 IST)
-  start_date = "2024-01-01T09:00:00+05:30"
-
   target {
     arn      = aws_lambda_function.stocks_signal.arn
     role_arn = aws_iam_role.scheduler_exec.arn

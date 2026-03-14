@@ -7,7 +7,9 @@ aws_account_id = "REDACTED"
 project_name   = "trading"
 environment    = "prod"
 
-bedrock_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
+# Claude 3 Haiku requires Anthropic use-case details form (one-time, per-account).
+# Using Amazon Nova Lite cross-region inference profile — no form needed, supports tool-use.
+bedrock_model_id = "us.amazon.nova-lite-v1:0"
 
 # Set to true AFTER running: infrastructure/build_layers.sh
 lambda_layers_built = true

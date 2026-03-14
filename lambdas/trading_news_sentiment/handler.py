@@ -3,7 +3,7 @@ Lambda handler: GET /api/news?symbol=INFY
 Wraps SentimentAgent from backend/agents/sentiment_agent.py
 """
 import json
-import os
+import asyncio
 
 from backend.agents.sentiment_agent import SentimentAgent
 
@@ -31,8 +31,13 @@ def handler(event, context):
     if name == symbol and bare in NAMES:
         name = NAMES[bare]
 
+    async def _analyse():
+        score, reasons = await _agent.get_sentiment_score(bare, name)
+        articles = await _agent.get_news(bare)
+        return score, reasons, articles
+
     try:
-        score, reasons, articles = _agent.get_sentiment_score(bare, name)
+        score, reasons, articles = asyncio.run(_analyse())
         return {
             "statusCode": 200,
             "headers": {
@@ -43,7 +48,7 @@ def handler(event, context):
                 "symbol":          bare,
                 "sentiment_score": round(score, 2),
                 "reasons":         reasons,
-                "articles":        articles[:10],   # Top 10 headlines
+                "news":            articles[:20],   # Top 20 headlines (frontend reads "news" key)
             }),
         }
     except Exception as e:

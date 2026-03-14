@@ -12,6 +12,7 @@ locals {
   cache_table_name      = "${local.prefix}-cache"
   wishlist_table_name   = "${local.prefix}-wishlist"
   iv_history_table_name = "${local.prefix}-iv-history"
+  portfolio_table_name  = "${local.prefix}-portfolio"
 
   # S3 bucket names (must be globally unique — account ID suffix ensures uniqueness)
   frontend_bucket_name = "${local.prefix}-frontend-${local.account_id}"
@@ -31,6 +32,7 @@ locals {
     bedrock_technical_tool = "${local.prefix}-bedrock-technical-tool"
     bedrock_sentiment_tool = "${local.prefix}-bedrock-sentiment-tool"
     bedrock_options_tool   = "${local.prefix}-bedrock-options-tool"
+    portfolio              = "${local.prefix}-portfolio"
   }
 
   # Common Lambda environment variables (injected into all functions)
@@ -41,5 +43,6 @@ locals {
     EXPORTS_BUCKET        = local.exports_bucket_name
     AWS_ACCOUNT_ID_VALUE  = local.account_id
     PROJECT_REGION        = local.region
+    PORTFOLIO_TABLE_NAME  = local.portfolio_table_name
   }
 }
