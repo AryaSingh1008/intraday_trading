@@ -42,10 +42,10 @@ class StockFetcher:
         """Batch-download historical + intraday data for all symbols at once."""
         results = {}
 
-        # --- Batch download: 3mo daily history ---
+        # --- Batch download: 1y daily history (for 200-day SMA) ---
         try:
             hist_all = yf.download(
-                symbols, period="3mo", interval="1d",
+                symbols, period="1y", interval="1d",
                 group_by="ticker", threads=True, progress=False,
             )
         except Exception as e:
@@ -148,8 +148,8 @@ class StockFetcher:
         try:
             ticker = yf.Ticker(symbol)
 
-            # --- Historical data (60 trading days) ---
-            hist = ticker.history(period="3mo", interval="1d")
+            # --- Historical data (1 year for 200-day SMA) ---
+            hist = ticker.history(period="1y", interval="1d")
             if hist.empty or len(hist) < 20:
                 logger.warning(f"{symbol}: Not enough historical data")
                 return None
