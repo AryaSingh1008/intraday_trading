@@ -13,8 +13,9 @@
     • MACD           – trend/momentum
     • ADX            – trend strength (+DI / -DI)
     • Bollinger Bands – volatility
-    • SMA 20 & 50    – trend direction
+    • SMA 20, 50 & 200 – trend direction + long-term filter
     • EMA 9 & 21     – short-term crossover
+    • Golden/Death Cross – 50-day vs 200-day SMA crossover
     • Volume z-score – confirms moves
     • ATR            – volatility context
 ====================================================
@@ -138,6 +139,28 @@ class TechnicalAgent:
                 else:
                     score -= 5
                     reasons.append("Current price is below 20-day average — negative momentum")
+
+            # ── 4a-ii.  200-day SMA (long-term trend filter) ──
+            if len(close) >= 200:
+                sma200 = float(close.rolling(200).mean().iloc[-1])
+                if current_price > sma200:
+                    score += 8
+                    reasons.append("Price is above 200-day SMA — long-term uptrend intact")
+                else:
+                    score -= 8
+                    reasons.append("Price is below 200-day SMA — long-term downtrend warning")
+
+                # Golden Cross / Death Cross (50-day vs 200-day)
+                if len(close) >= 200:
+                    sma50_now  = float(close.rolling(50).mean().iloc[-1])
+                    sma50_prev = float(close.rolling(50).mean().iloc[-5]) if len(close) > 54 else sma50_now
+                    sma200_prev = float(close.rolling(200).mean().iloc[-5]) if len(close) > 204 else sma200
+                    if sma50_now > sma200 and sma50_prev <= sma200_prev:
+                        score += 12
+                        reasons.append("Golden Cross detected — 50-day SMA crossed above 200-day SMA (strong bullish)")
+                    elif sma50_now < sma200 and sma50_prev >= sma200_prev:
+                        score -= 12
+                        reasons.append("Death Cross detected — 50-day SMA crossed below 200-day SMA (strong bearish)")
 
             # ── 4b. EMA 9 & EMA 21 Crossover ─────────────────
             if len(close) >= 21:

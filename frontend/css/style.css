@@ -1086,3 +1086,23 @@ body {
   .port-table th, .port-table td { padding: 8px 8px; font-size: 0.78rem; }
   .port-summary-val  { font-size: 1rem; }
 }
+
+/* ── Coffee loading animation ── */
+@keyframes coffeeFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+.loading-dot-anim {
+  display: inline-block;
+  animation: dotPulse 1.4s steps(4, end) infinite;
+  overflow: hidden;
+  width: 1.5ch;
+  vertical-align: bottom;
+}
+@keyframes dotPulse {
+  0%  { width: 0; }
+  33% { width: 0.5ch; }
+  66% { width: 1ch; }
+  100%{ width: 1.5ch; }
+}

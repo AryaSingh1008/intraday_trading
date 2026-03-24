@@ -10,11 +10,11 @@ A fully serverless cloud platform combining technical analysis, news sentiment, 
 
 ## 🎯 Why I Built This
 
-My dad is an active trader, and I watched him struggle daily — juggling multiple apps and browser tabs on his phone, switching between charts, news, and screeners just to analyze a handful of stocks. By the time he'd pieced together a view, the moment had often passed.
+My dad has been trading for years, but the process always frustrated me to watch. He'd have five browser tabs open on his phone — one for charts, one for news, one for a screener — switching between them constantly, trying to piece together a picture before the opportunity slipped away.
 
-I wanted to build him a **single dashboard** where he could see signals, news sentiment, and AI-powered analysis for all his stocks in one place — no tab-switching, no paid subscriptions, no delays. This is that tool.
+I built this so he has **one place to look**. Open the dashboard, see every stock's signal, read the news sentiment, and ask the AI a question — all without leaving the page. No subscriptions, no delays, no tab chaos.
 
-> This project is currently in **alpha**. It's functional and actively used, but will continue to evolve based on real trading feedback and needs.
+> This project is in **alpha** and actively evolving based on real trading feedback. Features and signals will improve over time.
 
 ### What Makes It Different
 
@@ -22,7 +22,7 @@ I wanted to build him a **single dashboard** where he could see signals, news se
 |---------|----------------------|---------------|
 | **Cost** | ₹500–2000/month | ~$2–5/month (AWS free tier) |
 | **AI Chat** | None or basic | Ask anything in plain English, get institutional analysis |
-| **Signal Engine** | 2–3 indicators | 10 technical indicators + news sentiment (adaptive weighting) |
+| **Signal Engine** | 2–3 indicators | 11 technical indicators + 200-day SMA + news sentiment (adaptive weighting) |
 | **Data Source** | Paid APIs | 100% free (yfinance, NSE, Google News RSS) |
 | **Infrastructure** | Always-on servers | Serverless — scales to $0 when market is closed |
 | **Export** | Screenshot or manual | One-click Excel export of all 43 stocks |
@@ -32,7 +32,8 @@ I wanted to build him a **single dashboard** where he could see signals, news se
 ## ✨ Key Features
 
 ### 📊 Smart Stock Signals
-- **43 NIFTY 50 stocks** scored using 10 technical indicators (RSI, MACD, Bollinger, EMA, SMA, ADX, Stochastic, Volume, RSI Divergence) + sentiment from 6 news sources
+- **43 NIFTY 50 stocks** scored using 11 technical indicators (RSI, MACD, Bollinger, EMA 9/21, SMA 20/50/200, Golden/Death Cross, ADX, Stochastic, Volume, RSI Divergence) + sentiment from 6 news sources
+- Uses **1 year of daily data** from yfinance — enough for 200-day moving averages and reliable long-term trend detection
 - Adaptive weighting adjusts technical vs sentiment ratio based on news volume
 - Signals: **STRONG BUY / BUY / HOLD / SELL / STRONG SELL** with confidence scores
 
@@ -160,10 +161,11 @@ User asks AI → Bedrock calls signal engine tools → returns analysis
 
 ## 📊 Signal Algorithm
 
-**10 Technical Indicators:**
+**11 Technical Indicators (1 year of daily data):**
 ```
-RSI (±20) | MACD (±15) | Bollinger (±15) | EMA (±15) | RSI Div (±12)
-SMA (±10) | Volume (±10) | ADX (±8) | Stochastic (±8)
+RSI (±20) | MACD (±15) | Bollinger (±15) | EMA 9/21 (±15) | RSI Div (±12)
+SMA 20/50/200 (±10) | Volume (±10) | ADX (±8) | Stochastic (±8)
+Golden Cross / Death Cross — 50-day SMA vs 200-day SMA
 ```
 
 **Sentiment Analysis from 6 RSS feeds:**
