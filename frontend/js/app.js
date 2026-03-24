@@ -13,8 +13,11 @@ let wishlistSymbols    = new Set();
 let currentModalSymbol = null;
 let currentTab         = "intraday";
 let countdownTimer     = null;
-let countdownSecs      = 300;
+let countdownSecs      = 900;
 let knownStocks        = [];
+let currentPage        = 1;
+const STOCKS_PER_PAGE  = 10;
+let backgroundLoadDone = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
@@ -224,12 +227,15 @@ async function loadStocks(forceRefresh) {
   hideEl("error-section");
   hideEl("summary-row");
   hideEl("stocks-section");
+  backgroundLoadDone = false;
+  currentPage = 1;
 
   const btn = document.getElementById("refresh-btn");
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading…'; }
 
   try {
-    const r = await fetch("/api/stocks");
+    // Phase 1: Fetch first page quickly
+    const r = await fetch("/api/stocks?page=1&per_page=" + STOCKS_PER_PAGE);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
 
@@ -245,18 +251,40 @@ async function loadStocks(forceRefresh) {
     showEl("summary-row");
     showEl("stocks-section");
 
-    const sc = document.getElementById("stock-count");
-    if (sc) sc.textContent = allStocks.length;
-
     // Sync wishlist hearts
     await loadWishlistSymbols();
     _syncAllHearts();
+
+    // Phase 2: Fetch all remaining stocks in background
+    _loadRemainingStocks();
   } catch (e) {
     console.error(e);
     hideEl("loading-section");
     showEl("error-section");
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh'; }
+  }
+}
+
+async function _loadRemainingStocks() {
+  try {
+    const r = await fetch("/api/stocks");
+    if (!r.ok) return;
+    const data = await r.json();
+
+    allStocks = data.stocks || [];
+    backgroundLoadDone = true;
+
+    const lu = document.getElementById("last-updated-text");
+    if (lu && data.last_updated) lu.textContent = "Updated: " + data.last_updated;
+
+    renderSummaryCards();
+    renderStocks();
+    _syncAllHearts();
+  } catch (e) {
+    console.error("Background stock load failed:", e);
+    backgroundLoadDone = true;
+    renderStocks(); // re-render to remove "loading more" message
   }
 }
 
@@ -306,10 +334,80 @@ function renderStocks() {
 
   if (!filtered.length) {
     grid.innerHTML = '<div class="col-12 text-center text-muted py-4">No stocks match this filter.</div>';
+    renderPagination(0);
     return;
   }
 
-  grid.innerHTML = filtered.map(function(s) { return stockCard(s, false); }).join("");
+  // Paginate
+  const totalPages = Math.ceil(filtered.length / STOCKS_PER_PAGE);
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+  const start = (currentPage - 1) * STOCKS_PER_PAGE;
+  const pageStocks = filtered.slice(start, start + STOCKS_PER_PAGE);
+
+  grid.innerHTML = pageStocks.map(function(s) { return stockCard(s, false); }).join("");
+
+  // Update stock count to show "X of Y"
+  const sc = document.getElementById("stock-count");
+  if (sc) sc.textContent = filtered.length;
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  let container = document.getElementById("pagination-controls");
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = '<nav aria-label="Stock pages"><ul class="pagination justify-content-center mb-0">';
+
+  // Previous
+  html += '<li class="page-item' + (currentPage === 1 ? ' disabled' : '') + '">'
+        + '<a class="page-link" href="#" onclick="goToPage(' + (currentPage - 1) + ');return false;">&laquo; Prev</a></li>';
+
+  // Page numbers — show max 7 pages with ellipsis
+  var startPage = Math.max(1, currentPage - 3);
+  var endPage = Math.min(totalPages, startPage + 6);
+  if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+
+  if (startPage > 1) {
+    html += '<li class="page-item"><a class="page-link" href="#" onclick="goToPage(1);return false;">1</a></li>';
+    if (startPage > 2) html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+  }
+
+  for (var p = startPage; p <= endPage; p++) {
+    html += '<li class="page-item' + (p === currentPage ? ' active' : '') + '">'
+          + '<a class="page-link" href="#" onclick="goToPage(' + p + ');return false;">' + p + '</a></li>';
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+    html += '<li class="page-item"><a class="page-link" href="#" onclick="goToPage(' + totalPages + ');return false;">' + totalPages + '</a></li>';
+  }
+
+  // Next
+  html += '<li class="page-item' + (currentPage === totalPages ? ' disabled' : '') + '">'
+        + '<a class="page-link" href="#" onclick="goToPage(' + (currentPage + 1) + ');return false;">Next &raquo;</a></li>';
+
+  html += '</ul></nav>';
+
+  if (!backgroundLoadDone && allStocks.length > 0) {
+    html += '<div class="text-center text-muted small mt-2"><i class="bi bi-hourglass-split me-1"></i>Loading more stocks in background...</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function goToPage(page) {
+  currentPage = page;
+  renderStocks();
+  // Scroll to top of stock grid
+  var grid = document.getElementById("stocks-section");
+  if (grid) grid.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function stockCard(s, fromWishlist) {
@@ -398,6 +496,7 @@ function stockCard(s, fromWishlist) {
 
 function filterStocks(filter, btn) {
   activeFilter = filter;
+  currentPage = 1;
   document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
   if (btn) btn.classList.add("active");
   renderStocks();
@@ -742,7 +841,7 @@ async function loadNews() {
 // ═══════════════════════════════════════════════════════════════ COUNTDOWN ════
 
 function startCountdown() {
-  countdownSecs = 300;
+  countdownSecs = 900;
   const txt = document.getElementById("countdown");
   const bar = document.getElementById("refresh-progress");
 
@@ -751,10 +850,10 @@ function startCountdown() {
   countdownTimer = setInterval(function() {
     countdownSecs--;
     if (txt) txt.textContent = countdownSecs;
-    if (bar) bar.style.width = ((300 - countdownSecs) / 300 * 100) + "%";
+    if (bar) bar.style.width = ((900 - countdownSecs) / 900 * 100) + "%";
 
     if (countdownSecs <= 0) {
-      countdownSecs = 300;
+      countdownSecs = 900;
       loadStocks(true);
       loadNews();
     }
@@ -940,12 +1039,57 @@ function _escHtml(str) {
 function openAddPortModal(symbol, name, price, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
   document.getElementById("port-symbol").value    = symbol;
-  document.getElementById("port-name").textContent = name + " (" + symbol + ")";
   document.getElementById("port-buy-price").value  = price || "";
   document.getElementById("port-qty").value         = 1;
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("port-buy-date").value   = today;
+
+  var nameEl   = document.getElementById("port-name");
+  var searchEl = document.getElementById("port-search-wrap");
+  var searchIn = document.getElementById("port-search-input");
+
+  if (symbol) {
+    // Called from a stock card — show static name, hide search
+    nameEl.textContent = name + " (" + symbol + ")";
+    nameEl.classList.remove("d-none");
+    if (searchEl) searchEl.classList.add("d-none");
+  } else {
+    // Called from "Add Stock" button — show search input
+    nameEl.classList.add("d-none");
+    nameEl.textContent = "";
+    if (searchEl) searchEl.classList.remove("d-none");
+    if (searchIn) searchIn.value = "";
+  }
+
   new bootstrap.Modal(document.getElementById("addPortModal")).show();
+  // Focus the search input if visible
+  if (!symbol && searchIn) setTimeout(function() { searchIn.focus(); }, 300);
+}
+
+function onPortSearchInput() {
+  var input = document.getElementById("port-search-input");
+  var sugg  = document.getElementById("port-search-suggestions");
+  if (!input || !sugg) return;
+  var q = input.value.trim().toUpperCase();
+  if (q.length < 1) { sugg.classList.add("d-none"); return; }
+
+  var matches = knownStocks.filter(function(s) {
+    return s.symbol.toUpperCase().indexOf(q) >= 0 || s.name.toUpperCase().indexOf(q) >= 0;
+  }).slice(0, 8);
+
+  if (!matches.length) { sugg.classList.add("d-none"); return; }
+
+  sugg.innerHTML = matches.map(function(s) {
+    return '<div class="suggestion-item" onclick="selectPortStock(\'' + s.symbol.replace(/'/g, "\\'") + '\',\'' + s.name.replace(/'/g, "\\'") + '\')">'
+         + '<strong>' + s.symbol + '</strong> <span class="text-muted">— ' + s.name + '</span></div>';
+  }).join("");
+  sugg.classList.remove("d-none");
+}
+
+function selectPortStock(symbol, name) {
+  document.getElementById("port-symbol").value = symbol;
+  document.getElementById("port-search-input").value = name + " (" + symbol + ")";
+  document.getElementById("port-search-suggestions").classList.add("d-none");
 }
 
 /** POST a new holding to /api/portfolio. */

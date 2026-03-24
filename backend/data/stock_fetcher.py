@@ -29,6 +29,100 @@ class StockFetcher:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._fetch, symbol)
 
+    async def get_batch_stock_data(self, symbols: list[str]) -> dict[str, Optional[dict]]:
+        """
+        Fetch all symbols in one batched yf.download() call.
+        Returns {symbol: stock_data_dict or None}.
+        Much faster than individual fetches (~1-2 requests vs ~100).
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._fetch_batch, symbols)
+
+    def _fetch_batch(self, symbols: list[str]) -> dict[str, Optional[dict]]:
+        """Batch-download historical + intraday data for all symbols at once."""
+        results = {}
+
+        # --- Batch download: 3mo daily history ---
+        try:
+            hist_all = yf.download(
+                symbols, period="3mo", interval="1d",
+                group_by="ticker", threads=True, progress=False,
+            )
+        except Exception as e:
+            logger.error(f"Batch history download failed: {e}")
+            hist_all = pd.DataFrame()
+
+        # --- Batch download: 1d intraday (for mini-charts) ---
+        try:
+            intra_all = yf.download(
+                symbols, period="1d", interval="15m",
+                group_by="ticker", threads=True, progress=False,
+            )
+        except Exception as e:
+            logger.error(f"Batch intraday download failed: {e}")
+            intra_all = pd.DataFrame()
+
+        for symbol in symbols:
+            try:
+                # Extract per-ticker history
+                if len(symbols) == 1:
+                    hist = hist_all.copy()
+                else:
+                    hist = hist_all[symbol].copy() if symbol in hist_all.columns.get_level_values(0) else pd.DataFrame()
+
+                # Drop rows where Close is NaN (ticker had no data)
+                if not hist.empty and "Close" in hist.columns:
+                    hist = hist.dropna(subset=["Close"])
+
+                if hist.empty or len(hist) < 20:
+                    logger.warning(f"{symbol}: Not enough historical data in batch")
+                    results[symbol] = None
+                    continue
+
+                current_price = round(float(hist["Close"].iloc[-1]), 2)
+                prev_close    = round(float(hist["Close"].iloc[-2]), 2)
+
+                if current_price <= 0:
+                    results[symbol] = None
+                    continue
+
+                change_pct = round(((current_price - prev_close) / prev_close * 100), 2) if prev_close else 0.0
+
+                # Extract per-ticker intraday
+                intraday = []
+                try:
+                    if len(symbols) == 1:
+                        intra = intra_all.copy()
+                    else:
+                        intra = intra_all[symbol].copy() if symbol in intra_all.columns.get_level_values(0) else pd.DataFrame()
+                    if not intra.empty and "Close" in intra.columns:
+                        intra = intra.dropna(subset=["Close"])
+                        intraday = [
+                            {"time": str(t), "price": round(float(p), 2)}
+                            for t, p in zip(intra.index, intra["Close"])
+                        ]
+                except Exception:
+                    pass
+
+                results[symbol] = {
+                    "symbol":        symbol,
+                    "current_price": current_price,
+                    "prev_close":    prev_close,
+                    "change_pct":    change_pct,
+                    "volume":        int(hist["Volume"].iloc[-1]) if "Volume" in hist.columns else 0,
+                    "avg_volume":    int(hist["Volume"].mean())   if "Volume" in hist.columns else 1,
+                    "high_52w":      round(float(hist["High"].max()), 2),
+                    "low_52w":       round(float(hist["Low"].min()),  2),
+                    "hist":          hist,
+                    "intraday":      intraday,
+                }
+
+            except Exception as e:
+                logger.error(f"Batch parse error for {symbol}: {e}")
+                results[symbol] = None
+
+        return results
+
     # ── Sync worker (runs in thread-pool) ──────────────────
     def _fetch(self, symbol: str) -> Optional[dict]:
         """

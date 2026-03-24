@@ -5,6 +5,8 @@ Wraps StockFetcher + SignalAgent with DynamoDB caching.
 import json
 import os
 import asyncio
+import time
+from datetime import datetime
 
 import dynamo_cache
 from backend.data.stock_fetcher import StockFetcher
@@ -89,13 +91,99 @@ async def _analyse_one(symbol: str, name: str) -> dict:
         return {"symbol": symbol, "name": name, "error": "No data available"}
 
     result = await _agent.analyze(symbol, name, stock_data)
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)
+    dynamo_cache.set_cached(cache_key, result, ttl_seconds=900)
     return result
 
 
-async def _analyse_all(warmup: bool = False) -> list:
-    tasks = [_analyse_one(sym, name) for sym, name in INDIAN_STOCKS.items()]
-    return await asyncio.gather(*tasks)
+async def _analyse_all(warmup: bool = False, deadline: float = 0) -> list:
+    # Check cache first — return cached results without hitting yfinance
+    symbols_to_fetch = {}
+    cached_results = []
+    for symbol, name in INDIAN_STOCKS.items():
+        cached = dynamo_cache.get_cached(symbol)
+        if cached:
+            cached_results.append(cached)
+        else:
+            symbols_to_fetch[symbol] = name
+
+    # If everything is cached, return immediately
+    if not symbols_to_fetch:
+        return cached_results
+
+    # Process uncached symbols in batches of 10
+    uncached_symbols = list(symbols_to_fetch.items())
+    BATCH_SIZE = 10
+
+    for i in range(0, len(uncached_symbols), BATCH_SIZE):
+        # If we have a deadline and are running low on time, stop and return
+        # what we have so far (partial results are better than a timeout)
+        if deadline and time.time() > deadline:
+            break
+
+        batch = uncached_symbols[i : i + BATCH_SIZE]
+        batch_symbols = [sym for sym, _ in batch]
+
+        # Batch-download this chunk
+        batch_data = await _fetcher.get_batch_stock_data(batch_symbols)
+
+        # Analyse each fetched stock in this chunk
+        analyse_tasks = []
+        for symbol, name in batch:
+            stock_data = batch_data.get(symbol)
+            if not stock_data:
+                cached_results.append({"symbol": symbol, "name": name, "error": "No data available"})
+                continue
+            analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data))
+
+        if analyse_tasks:
+            new_results = await asyncio.gather(*analyse_tasks)
+            cached_results.extend(new_results)
+
+    return cached_results
+
+
+async def _analyse_and_cache(symbol: str, name: str, stock_data: dict) -> dict:
+    result = await _agent.analyze(symbol, name, stock_data)
+    dynamo_cache.set_cached(symbol, result, ttl_seconds=900)
+    return result
+
+
+async def _analyse_page(page: int, per_page: int) -> list:
+    """Analyse only the stocks for a specific page (fast for first page)."""
+    all_symbols = list(INDIAN_STOCKS.items())
+    start = (page - 1) * per_page
+    page_symbols = all_symbols[start : start + per_page]
+
+    results = []
+    symbols_to_fetch = {}
+    for symbol, name in page_symbols:
+        cached = dynamo_cache.get_cached(symbol)
+        if cached:
+            results.append(cached)
+        else:
+            symbols_to_fetch[symbol] = name
+
+    if not symbols_to_fetch:
+        return results
+
+    batch_data = await _fetcher.get_batch_stock_data(list(symbols_to_fetch.keys()))
+    analyse_tasks = []
+    for symbol, name in symbols_to_fetch.items():
+        stock_data = batch_data.get(symbol)
+        if not stock_data:
+            results.append({"symbol": symbol, "name": name, "error": "No data available"})
+            continue
+        analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data))
+
+    if analyse_tasks:
+        new_results = await asyncio.gather(*analyse_tasks)
+        results.extend(new_results)
+
+    return results
+
+
+def _now_str() -> str:
+    return datetime.now().strftime("%d %b %Y, %I:%M %p")
 
 
 def handler(event, context):
@@ -120,10 +208,33 @@ def handler(event, context):
         return _json(result)
 
     # GET /api/stocks — all stocks (or EventBridge warmup)
-    results = asyncio.run(_analyse_all(warmup=is_warmup))
     if is_warmup:
+        # EventBridge warmup — no API Gateway timeout, fetch everything
+        results = asyncio.run(_analyse_all(warmup=True, deadline=0))
         return _json({"warmed": len(results), "message": "Cache pre-warmed"})
-    return _json({"stocks": results, "count": len(results)})
+
+    # Paginated request — ?page=1&per_page=10 — fast for first page
+    page     = int(qs.get("page", 0))
+    per_page = int(qs.get("per_page", 0))
+    if page > 0 and per_page > 0:
+        results = asyncio.run(_analyse_page(page, per_page))
+        return _json({
+            "stocks": results,
+            "count": len(results),
+            "total": len(INDIAN_STOCKS),
+            "page": page,
+            "per_page": per_page,
+            "last_updated": _now_str(),
+        })
+
+    # Full request — used by background fetch
+    deadline = time.time() + 20
+    results = asyncio.run(_analyse_all(warmup=False, deadline=deadline))
+    return _json({
+        "stocks": results,
+        "count": len(results),
+        "last_updated": _now_str(),
+    })
 
 
 def _json(data, status: int = 200):

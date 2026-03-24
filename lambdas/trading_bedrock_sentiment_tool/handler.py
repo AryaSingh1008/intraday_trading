@@ -65,7 +65,7 @@ async def _analyse(symbol: str, company_name: str) -> dict:
         "reasons":         reasons[:5] if reasons else [],
     }
 
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)
+    dynamo_cache.set_cached(cache_key, result, ttl_seconds=900)
     return result
 
 

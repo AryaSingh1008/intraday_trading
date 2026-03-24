@@ -113,7 +113,7 @@ OPTIONS_INSTRUMENTS = {
 # ── In-memory cache (refreshes every 5 min) ──────────────
 _cache: dict = {}
 _cache_ts: dict = {}
-CACHE_TTL = 300  # seconds
+CACHE_TTL = 900  # seconds (15 minutes)
 
 
 def _is_cached(key: str) -> bool:
@@ -130,11 +130,20 @@ async def serve_frontend():
 
 
 @app.get("/api/stocks")
-async def get_stocks():
-    """Return all Indian stocks with AI-generated BUY / SELL / HOLD signals."""
+async def get_stocks(page: int = 0, per_page: int = 0):
+    """Return Indian stocks with AI-generated BUY / SELL / HOLD signals.
+    Optional pagination: ?page=1&per_page=10 returns only that page of stocks.
+    """
+    stock_items = list(INDIAN_STOCKS.items())
+
+    # If paginated, only process the requested slice
+    if page > 0 and per_page > 0:
+        start = (page - 1) * per_page
+        stock_items = stock_items[start : start + per_page]
+
     results = []
 
-    for symbol, name in INDIAN_STOCKS.items():
+    for symbol, name in stock_items:
         cache_key = symbol
         try:
             if _is_cached(cache_key):
@@ -154,11 +163,16 @@ async def get_stocks():
     order = {"STRONG BUY": 0, "BUY": 1, "HOLD": 2, "SELL": 3, "STRONG SELL": 4}
     results.sort(key=lambda x: order.get(x.get("signal", "HOLD"), 2))
 
-    return {
+    response = {
         "stocks":       results,
         "last_updated": datetime.now().strftime("%d %b %Y, %I:%M %p"),
         "count":        len(results),
     }
+    if page > 0 and per_page > 0:
+        response["total"] = len(INDIAN_STOCKS)
+        response["page"] = page
+        response["per_page"] = per_page
+    return response
 
 
 @app.get("/api/stock/{symbol}")
