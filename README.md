@@ -251,15 +251,6 @@ intraday_trading/
 
 ---
 
-## 🚀 Deployment
-
-**Deploy to AWS:**
-```bash
-cd infrastructure/terraform
-terraform init
-terraform apply
-```
-
 **Cost:** $2–5/month @ moderate usage
 - Lambda: 1M calls/month FREE
 - DynamoDB: 25 RCU/WCU FREE
