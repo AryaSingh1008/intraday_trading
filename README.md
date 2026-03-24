@@ -8,9 +8,13 @@ A fully serverless cloud platform combining technical analysis, news sentiment, 
 
 ---
 
-## 🎯 Why This Tool?
+## 🎯 Why I Built This
 
-Most retail traders rely on gut feeling or paid platforms that cost ₹500–2000/month. This platform gives you **institutional-level analysis for free** — combining 10 technical indicators, real-time news sentiment from 6 sources, and AI chat powered by Amazon Bedrock, all running on a serverless stack that costs under $5/month.
+My dad is an active trader, and I watched him struggle daily — juggling multiple apps and browser tabs on his phone, switching between charts, news, and screeners just to analyze a handful of stocks. By the time he'd pieced together a view, the moment had often passed.
+
+I wanted to build him a **single dashboard** where he could see signals, news sentiment, and AI-powered analysis for all his stocks in one place — no tab-switching, no paid subscriptions, no delays. This is that tool.
+
+> This project is currently in **alpha**. It's functional and actively used, but will continue to evolve based on real trading feedback and needs.
 
 ### What Makes It Different
 
