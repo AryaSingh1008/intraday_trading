@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=10"/>
+  <link rel="stylesheet" href="/css/style.css?v=11"/>
 </head>
 <body>
 
@@ -68,7 +68,7 @@
 
 <!-- ══════════════════════════════════════════════ AUTO-REFRESH BAR ══ -->
 <div class="refresh-bar" id="refresh-bar">
-  <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">300</strong>s</span>
+  <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">900</strong>s</span>
   <div class="refresh-progress-outer">
     <div class="refresh-progress-inner" id="refresh-progress"></div>
   </div>
@@ -163,6 +163,8 @@
         </div>
       </div>
       <div class="row g-3" id="stock-grid"></div>
+      <!-- Pagination -->
+      <div class="mt-4" id="pagination-controls"></div>
     </div>
 
     <!-- News section -->
@@ -503,6 +505,13 @@
         <div class="mb-3">
           <label class="form-label fw-bold text-muted small">STOCK</label>
           <div id="port-name" class="fw-bold fs-6"></div>
+          <!-- Search input shown when adding stock manually (no symbol pre-filled) -->
+          <div id="port-search-wrap" class="d-none" style="position:relative;">
+            <input type="text" id="port-search-input" class="form-control"
+                   placeholder="Search stock e.g. INFY, TCS, RELIANCE"
+                   oninput="onPortSearchInput()" autocomplete="off" />
+            <div id="port-search-suggestions" class="search-suggestions d-none"></div>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold text-muted small" for="port-buy-price">BUY PRICE (₹)</label>
@@ -531,6 +540,6 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/app.js?v=8"></script>
+<script src="/js/app.js?v=9"></script>
 </body>
 </html>

@@ -108,7 +108,7 @@ async def _analyse(symbol: str) -> dict:
         "data_source":       "yfinance",
     }
 
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=300)
+    dynamo_cache.set_cached(cache_key, result, ttl_seconds=900)
     return result
 
 
