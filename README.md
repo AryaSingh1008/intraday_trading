@@ -4,21 +4,93 @@
 
 A fully serverless cloud platform combining technical analysis, news sentiment, and AI-powered recommendations. Deployed on AWS with 100% uptime, zero infrastructure overhead, and pay-as-you-go pricing (~$2–5/month).
 
-> ⚠️ **Disclaimer:** This tool is for **educational purposes only**.
-> Trading involves risk and you may lose money. Always consult a financial advisor before investing real money.
+🔗 **Live Demo:** [https://dax4jpe1e1lnf.cloudfront.net](https://dax4jpe1e1lnf.cloudfront.net)
 
 ---
 
-## 🎯 Key Features
+## 🎯 Why This Tool?
 
-✅ **43 NIFTY 50 Stocks** — Real-time BUY/SELL/HOLD signals (refreshed every 5 min)
-✅ **AI Chat Interface** — Ask in plain English, get institutional analysis
-✅ **Portfolio Tracker** — Track holdings with live P&L (day + total gain)
-✅ **Wishlist/Watchlist** — Bookmark stocks, persisted across sessions
-✅ **Market News** — Real-time sentiment (bullish/bearish labels)
-✅ **Excel Export** — Download full analysis for all 43 stocks
-✅ **Zero Server Costs** — 100% serverless (scales to $0 when market closed)
-✅ **100% Free Data** — yfinance, NSE, Google News RSS (no paid APIs)
+Most retail traders rely on gut feeling or paid platforms that cost ₹500–2000/month. This platform gives you **institutional-level analysis for free** — combining 10 technical indicators, real-time news sentiment from 6 sources, and AI chat powered by Amazon Bedrock, all running on a serverless stack that costs under $5/month.
+
+### What Makes It Different
+
+| Feature | Typical Trading Tools | This Platform |
+|---------|----------------------|---------------|
+| **Cost** | ₹500–2000/month | ~$2–5/month (AWS free tier) |
+| **AI Chat** | None or basic | Ask anything in plain English, get institutional analysis |
+| **Signal Engine** | 2–3 indicators | 10 technical indicators + news sentiment (adaptive weighting) |
+| **Data Source** | Paid APIs | 100% free (yfinance, NSE, Google News RSS) |
+| **Infrastructure** | Always-on servers | Serverless — scales to $0 when market is closed |
+| **Export** | Screenshot or manual | One-click Excel export of all 43 stocks |
+
+---
+
+## ✨ Key Features
+
+### 📊 Smart Stock Signals
+- **43 NIFTY 50 stocks** scored using 10 technical indicators (RSI, MACD, Bollinger, EMA, SMA, ADX, Stochastic, Volume, RSI Divergence) + sentiment from 6 news sources
+- Adaptive weighting adjusts technical vs sentiment ratio based on news volume
+- Signals: **STRONG BUY / BUY / HOLD / SELL / STRONG SELL** with confidence scores
+
+### ⚡ Progressive Loading with Pagination
+- First 10 stocks load instantly (~3s), remaining stocks load in background
+- Paginated view (10 stocks per page) with smooth navigation
+- No more waiting for all 43 stocks — browse page 1 while pages 2–5 load behind the scenes
+
+### 🤖 AI Chat (Amazon Bedrock)
+- Ask in plain English: *"Should I buy RELIANCE today?"* or *"Compare TCS vs INFY"*
+- AI calls the same signal engine you see on the dashboard — real analysis, not generic answers
+- Powered by Amazon Nova Lite with tool-use for live data access
+
+### 💼 Portfolio Tracker
+- Add holdings with buy price and quantity
+- Live P&L calculation (day gain + total gain) using real-time prices
+- Search and add any of the 43 tracked stocks via autocomplete
+
+### 📰 Market News with Sentiment
+- Aggregates news from 6 RSS feeds (Economic Times, Moneycontrol, LiveMint, etc.)
+- Each headline tagged **Bullish / Bearish / Neutral** using VADER NLP + finance lexicon
+- Recency-weighted: fresh news impacts signals more than old news
+
+### ⭐ Wishlist & Excel Export
+- Bookmark stocks to a persistent watchlist (saved in DynamoDB)
+- One-click Excel export with full analysis for all 43 stocks
+
+---
+
+## 🔄 How It Works
+
+```
+User opens website
+      │
+      ↓
+CloudFront serves static files from nearest edge (< 50ms)
+      │
+      ↓
+Frontend requests first 10 stocks → API Gateway → Lambda
+      │                                              │
+      │                                    Checks DynamoDB cache
+      │                                    (15-min TTL)
+      │                                              │
+      │                              Cache HIT → return instantly
+      │                              Cache MISS → batch fetch from yfinance
+      │                                              │
+      │                                    Run 10 technical indicators
+      │                                    + sentiment analysis
+      │                                              │
+      │                                    Cache results in DynamoDB
+      │                                              │
+      ↓                                              ↓
+Page 1 renders immediately          Background: fetch remaining stocks
+      │                              (pages 2–5 load silently)
+      ↓
+User browses, clicks stock → modal with intraday chart + full analysis
+      │
+      ↓
+User asks AI → Bedrock calls signal engine tools → returns analysis
+```
+
+**EventBridge** runs a warmup every 5 minutes during market hours, pre-caching stock data so most user requests hit cache and return in < 1 second.
 
 ---
 
@@ -33,7 +105,7 @@ A fully serverless cloud platform combining technical analysis, news sentiment, 
          │
          ↓ HTTPS
   ┌──────────────────┐
-  │ CloudFront CDN   │  (Singapore PoP, HTTP/2 + HTTP/3)
+  │ CloudFront CDN   │  (Global edge network, HTTP/2 + HTTP/3)
   └────┬──────┬──────┘
        │      │
   Static │     │ API calls
@@ -59,9 +131,9 @@ A fully serverless cloud platform combining technical analysis, news sentiment, 
   │      │            │  │
   ↓      ↓            ↓  ↓
 [DynamoDB] [Bedrock] [yfinance] [RSS feeds]
-- cache      Claude    prices      6 sources
-- wishlist   3.5 H     NSE opts    sentiment
-- portfolio  Aiken
+- cache      Nova     prices      6 sources
+- wishlist   Lite     NSE opts    sentiment
+- portfolio
 - iv-hist.
 ```
 
@@ -72,13 +144,13 @@ A fully serverless cloud platform combining technical analysis, news sentiment, 
 | Layer | Technology | Service |
 |-------|-----------|---------|
 | **Frontend** | HTML5 + Bootstrap 5 + Chart.js | S3 + CloudFront |
-| **Backend** | 13 Lambda functions (Python) | AWS Lambda |
+| **Backend** | 13 Lambda functions (Python 3.12) | AWS Lambda |
 | **Database** | NoSQL, serverless, auto-scale | DynamoDB |
-| **AI/Chat** | Claude 3.5 Haiku (tool-use) | AWS Bedrock |
-| **API** | HTTP v2, 15 routes | API Gateway |
-| **Data Sources** | yfinance, NSE, 6 RSS feeds | Free (no APIs) |
+| **AI/Chat** | Amazon Nova Lite (tool-use) | AWS Bedrock |
+| **API** | HTTP v2, 15 routes, 29s timeout | API Gateway |
+| **Data Sources** | yfinance, NSE, 6 RSS feeds | Free (no paid APIs) |
 | **IaC** | 10+ Terraform modules | Terraform |
-| **Monitoring** | Real-time logs | CloudWatch |
+| **Caching** | DynamoDB with 15-min TTL | EventBridge warmup |
 
 ---
 
@@ -115,8 +187,7 @@ Thresholds:
 intraday_trading/
 ├── README.md
 ├── requirements.txt
-├── TradingPlatform_Presentation.pptx   ← 18-slide office deck
-
+│
 ├── backend/                            ← Agents (used in Lambda + local)
 │   ├── agents/
 │   │   ├── technical_agent.py          ← 10 indicators
@@ -124,7 +195,7 @@ intraday_trading/
 │   │   ├── signal_agent.py             ← Orchestrator
 │   │   └── options_agent.py            ← NSE analysis
 │   ├── data/
-│   │   ├── stock_fetcher.py            ← yfinance
+│   │   ├── stock_fetcher.py            ← yfinance (batch + single)
 │   │   ├── options_fetcher.py          ← NSE chain
 │   │   └── playwright_fetcher.py       ← Browser
 │   ├── utils/
@@ -133,18 +204,18 @@ intraday_trading/
 │   │   ├── iv_history_store.py
 │   │   └── wishlist_store.py
 │   └── app.py                          ← FastAPI (local dev)
-
+│
 ├── frontend/                           ← SPA (S3 + CloudFront)
-│   ├── index.html                      ← 4 tabs
+│   ├── index.html                      ← 4 tabs + pagination
 │   ├── css/style.css
-│   └── js/app.js
-
+│   └── js/app.js                       ← Progressive loading + pagination
+│
 ├── lambdas/                            ← AWS Lambda handlers
-│   ├── trading_stocks_signal/          ← Main engine
+│   ├── trading_stocks_signal/          ← Main engine (paginated + batch)
 │   ├── trading_options_analysis/
 │   ├── trading_news_sentiment/
 │   ├── trading_wishlist/
-│   ├── trading_portfolio/              ← NEW: Holdings tracker
+│   ├── trading_portfolio/              ← Holdings tracker
 │   ├── trading_market_status/
 │   ├── trading_excel_export/
 │   ├── trading_cache_clear/
@@ -152,7 +223,7 @@ intraday_trading/
 │   ├── trading_bedrock_technical_tool/
 │   ├── trading_bedrock_sentiment_tool/
 │   └── trading_bedrock_options_tool/
-
+│
 └── infrastructure/                     ← Terraform IaC
     ├── terraform/
     │   ├── api_gateway.tf
@@ -197,23 +268,12 @@ terraform apply
 
 ## 🔒 Security
 
-✅ CloudFront-only entry point (S3 private)
-✅ IAM roles with least-privilege
-✅ DynamoDB: Lambda-only access
-✅ Pre-signed URLs (1-hour expiry)
-✅ No hardcoded credentials
-✅ Terraform state encrypted
-
----
-
-## 📊 Key Functions
-
-**SignalAgent.analyze()** — Master orchestrator calling TechnicalAgent + SentimentAgent in parallel
-**TechnicalAgent.analyze()** — Scores 10 indicators, returns 0–100
-**SentimentAgent.get_sentiment_score()** — VADER + finance lexicon on 6 RSS feeds
-**_detect_intent()** — Intent classifier with NSE aliases expansion (icici → ICICIBANK)
-**renderModalChart()** — 15-min intraday chart (Chart.js)
-**loadPortfolio()** — Fetch holdings, calculate live P&L
+- CloudFront-only entry point (S3 bucket private)
+- IAM roles with least-privilege per Lambda
+- DynamoDB: Lambda-only access (no public endpoints)
+- Pre-signed URLs for Excel export (1-hour expiry)
+- No hardcoded credentials (terraform.tfvars gitignored)
+- Terraform state encrypted
 
 ---
 
@@ -224,17 +284,3 @@ pip install -r requirements.txt
 python run.py
 # Opens http://localhost:8000
 ```
-
----
-
-## 📞 Support
-
-For issues, check:
-1. CloudWatch Lambda logs
-2. API Gateway metrics
-3. DynamoDB on-demand billing
-4. Bedrock token usage
-
----
-
-*Built with AWS, Python, AI, and ❤️ for smarter, safer investing.*
