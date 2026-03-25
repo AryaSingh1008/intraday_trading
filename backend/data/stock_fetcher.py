@@ -23,8 +23,8 @@ class StockFetcher:
         """
         Returns a dict with:
           - current_price, prev_close, change_pct
-          - hist: last 60 days of OHLCV as a DataFrame
-          - info: company meta-data dict
+          - hist: last 1y of OHLCV as a DataFrame
+          - intraday: list of {time, open, high, low, close, volume, price}
         """
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._fetch, symbol)
@@ -52,7 +52,7 @@ class StockFetcher:
             logger.error(f"Batch history download failed: {e}")
             hist_all = pd.DataFrame()
 
-        # --- Batch download: 1d intraday (for mini-charts) ---
+        # --- Batch download: 1d intraday (for VWAP + mini-charts) ---
         try:
             intra_all = yf.download(
                 symbols, period="1d", interval="15m",
@@ -61,6 +61,16 @@ class StockFetcher:
         except Exception as e:
             logger.error(f"Batch intraday download failed: {e}")
             intra_all = pd.DataFrame()
+
+        # --- Fetch NIFTY 50 for relative strength calculation (one call, shared) ---
+        nifty_close = None
+        try:
+            nifty_data = yf.download("^NSEI", period="1y", interval="1d",
+                                     progress=False, threads=False)
+            if not nifty_data.empty and "Close" in nifty_data.columns:
+                nifty_close = nifty_data["Close"].dropna()
+        except Exception as e:
+            logger.warning(f"NIFTY 50 fetch failed: {e}")
 
         for symbol in symbols:
             try:
@@ -88,7 +98,7 @@ class StockFetcher:
 
                 change_pct = round(((current_price - prev_close) / prev_close * 100), 2) if prev_close else 0.0
 
-                # Extract per-ticker intraday
+                # Extract per-ticker intraday with full OHLCV
                 intraday = []
                 try:
                     if len(symbols) == 1:
@@ -97,10 +107,19 @@ class StockFetcher:
                         intra = intra_all[symbol].copy() if symbol in intra_all.columns.get_level_values(0) else pd.DataFrame()
                     if not intra.empty and "Close" in intra.columns:
                         intra = intra.dropna(subset=["Close"])
-                        intraday = [
-                            {"time": str(t), "price": round(float(p), 2)}
-                            for t, p in zip(intra.index, intra["Close"])
-                        ]
+                        for t, row in intra.iterrows():
+                            try:
+                                intraday.append({
+                                    "time":   str(t),
+                                    "open":   round(float(row["Open"]),  2),
+                                    "high":   round(float(row["High"]),  2),
+                                    "low":    round(float(row["Low"]),   2),
+                                    "close":  round(float(row["Close"]), 2),
+                                    "volume": int(row["Volume"]) if not pd.isna(row.get("Volume", float("nan"))) else 0,
+                                    "price":  round(float(row["Close"]), 2),  # backward compat alias
+                                })
+                            except Exception:
+                                pass
                 except Exception:
                     pass
 
@@ -115,6 +134,7 @@ class StockFetcher:
                     "low_52w":       round(float(hist["Low"].min()),  2),
                     "hist":          hist,
                     "intraday":      intraday,
+                    "nifty_hist":    nifty_close,  # shared NIFTY 50 close series
                 }
 
             except Exception as e:
@@ -169,15 +189,34 @@ class StockFetcher:
 
             change_pct = ((current_price - prev_close) / prev_close * 100) if prev_close else 0.0
 
-            # --- Intraday data (for today's mini-chart) ---
+            # --- Intraday data with full OHLCV (for VWAP + charts) ---
             intraday = []
             try:
                 today = ticker.history(period="1d", interval="15m")
                 if not today.empty:
-                    intraday = [
-                        {"time": str(t), "price": round(float(p), 2)}
-                        for t, p in zip(today.index, today["Close"])
-                    ]
+                    for t, row in today.iterrows():
+                        try:
+                            intraday.append({
+                                "time":   str(t),
+                                "open":   round(float(row["Open"]),  2),
+                                "high":   round(float(row["High"]),  2),
+                                "low":    round(float(row["Low"]),   2),
+                                "close":  round(float(row["Close"]), 2),
+                                "volume": int(row["Volume"]) if not pd.isna(row.get("Volume", float("nan"))) else 0,
+                                "price":  round(float(row["Close"]), 2),  # backward compat alias
+                            })
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # --- NIFTY 50 for relative strength (single fetch) ---
+            nifty_close = None
+            try:
+                nifty_data = yf.download("^NSEI", period="1y", interval="1d",
+                                         progress=False, threads=False)
+                if not nifty_data.empty and "Close" in nifty_data.columns:
+                    nifty_close = nifty_data["Close"].dropna()
             except Exception:
                 pass
 
@@ -191,7 +230,8 @@ class StockFetcher:
                 "high_52w":      round(float(hist["High"].max()), 2),
                 "low_52w":       round(float(hist["Low"].min()),  2),
                 "hist":          hist,        # DataFrame used by agents
-                "intraday":      intraday,    # list of dicts for chart
+                "intraday":      intraday,    # list of dicts for chart + VWAP
+                "nifty_hist":    nifty_close, # NIFTY 50 close series
             }
 
         except Exception as e:

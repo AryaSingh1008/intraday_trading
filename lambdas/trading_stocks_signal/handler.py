@@ -13,59 +13,68 @@ from backend.data.stock_fetcher import StockFetcher
 from backend.agents.signal_agent import SignalAgent
 
 INDIAN_STOCKS = {
-    # ── Original large-caps (retained) ────────────────────────────────────────
-    "RELIANCE.NS":   "Reliance Industries",
-    "TCS.NS":        "Tata Consultancy Services",
-    "INFY.NS":       "Infosys",
-    "HDFCBANK.NS":   "HDFC Bank",
-    "ICICIBANK.NS":  "ICICI Bank",
-    "WIPRO.NS":      "Wipro",
-    "TATAMOTORS.NS": "Tata Motors",
-    "SBIN.NS":       "State Bank of India",
-    "AXISBANK.NS":   "Axis Bank",
-    "KOTAKBANK.NS":  "Kotak Mahindra Bank",
-    "BAJFINANCE.NS": "Bajaj Finance",
-    "SUNPHARMA.NS":  "Sun Pharmaceutical",
-    "MARUTI.NS":     "Maruti Suzuki",
-    "LT.NS":         "Larsen & Toubro",
-    "ONGC.NS":       "ONGC",
-    # ── NIFTY 50 additions ────────────────────────────────────────────────────
-    "ADANIENT.NS":   "Adani Enterprises",
-    "ADANIPORTS.NS": "Adani Ports",
-    "APOLLOHOSP.NS": "Apollo Hospitals",
-    "ASIANPAINT.NS": "Asian Paints",
-    "BAJAJ-AUTO.NS": "Bajaj Auto",
-    "BAJAJFINSV.NS": "Bajaj Finserv",
-    "BEL.NS":        "Bharat Electronics",
-    "BPCL.NS":       "Bharat Petroleum",
-    "BHARTIARTL.NS": "Bharti Airtel",
-    "BRITANNIA.NS":  "Britannia Industries",
-    "CIPLA.NS":      "Cipla",
-    "COALINDIA.NS":  "Coal India",
-    "DRREDDY.NS":    "Dr. Reddy's Laboratories",
-    "EICHERMOT.NS":  "Eicher Motors",
-    "GRASIM.NS":     "Grasim Industries",
-    "HCLTECH.NS":    "HCL Technologies",
-    "HDFCLIFE.NS":   "HDFC Life Insurance",
-    "HEROMOTOCO.NS": "Hero MotoCorp",
-    "HINDALCO.NS":   "Hindalco Industries",
-    "HINDUNILVR.NS": "Hindustan Unilever",
-    "INDUSINDBK.NS": "IndusInd Bank",
-    "ITC.NS":        "ITC",
-    "JIOFIN.NS":     "Jio Financial Services",
-    "JSWSTEEL.NS":   "JSW Steel",
-    "LTIM.NS":       "LTIMindtree",
-    "M&M.NS":        "Mahindra & Mahindra",
-    "NESTLEIND.NS":  "Nestle India",
-    "NTPC.NS":       "NTPC",
-    "POWERGRID.NS":  "Power Grid Corporation",
-    "SHRIRAMFIN.NS": "Shriram Finance",
-    "TATACONSUM.NS": "Tata Consumer Products",
-    "TATASTEEL.NS":  "Tata Steel",
-    "TECHM.NS":      "Tech Mahindra",
-    "TITAN.NS":      "Titan Company",
-    "TRENT.NS":      "Trent",
-    "ULTRACEMCO.NS": "UltraTech Cement",
+    # ── IT ─────────────────────────────────────────────────────────────────────
+    "TCS.NS":        {"name": "Tata Consultancy Services", "sector": "IT"},
+    "INFY.NS":       {"name": "Infosys",                   "sector": "IT"},
+    "WIPRO.NS":      {"name": "Wipro",                     "sector": "IT"},
+    "HCLTECH.NS":    {"name": "HCL Technologies",          "sector": "IT"},
+    "TECHM.NS":      {"name": "Tech Mahindra",             "sector": "IT"},
+    "LTIM.NS":       {"name": "LTIMindtree",               "sector": "IT"},
+    # ── Banking ────────────────────────────────────────────────────────────────
+    "HDFCBANK.NS":   {"name": "HDFC Bank",                 "sector": "Banking"},
+    "ICICIBANK.NS":  {"name": "ICICI Bank",                "sector": "Banking"},
+    "SBIN.NS":       {"name": "State Bank of India",       "sector": "Banking"},
+    "AXISBANK.NS":   {"name": "Axis Bank",                 "sector": "Banking"},
+    "KOTAKBANK.NS":  {"name": "Kotak Mahindra Bank",       "sector": "Banking"},
+    "INDUSINDBK.NS": {"name": "IndusInd Bank",             "sector": "Banking"},
+    # ── Finance ────────────────────────────────────────────────────────────────
+    "BAJFINANCE.NS": {"name": "Bajaj Finance",             "sector": "Finance"},
+    "BAJAJFINSV.NS": {"name": "Bajaj Finserv",             "sector": "Finance"},
+    "SHRIRAMFIN.NS": {"name": "Shriram Finance",           "sector": "Finance"},
+    "JIOFIN.NS":     {"name": "Jio Financial Services",    "sector": "Finance"},
+    "HDFCLIFE.NS":   {"name": "HDFC Life Insurance",       "sector": "Finance"},
+    # ── Energy ────────────────────────────────────────────────────────────────
+    "RELIANCE.NS":   {"name": "Reliance Industries",       "sector": "Energy"},
+    "ONGC.NS":       {"name": "ONGC",                      "sector": "Energy"},
+    "BPCL.NS":       {"name": "Bharat Petroleum",          "sector": "Energy"},
+    "NTPC.NS":       {"name": "NTPC",                      "sector": "Energy"},
+    "POWERGRID.NS":  {"name": "Power Grid Corporation",    "sector": "Energy"},
+    "COALINDIA.NS":  {"name": "Coal India",                "sector": "Energy"},
+    "ADANIENT.NS":   {"name": "Adani Enterprises",         "sector": "Energy"},
+    # ── Pharma ────────────────────────────────────────────────────────────────
+    "SUNPHARMA.NS":  {"name": "Sun Pharmaceutical",        "sector": "Pharma"},
+    "CIPLA.NS":      {"name": "Cipla",                     "sector": "Pharma"},
+    "DRREDDY.NS":    {"name": "Dr. Reddy's Laboratories",  "sector": "Pharma"},
+    "APOLLOHOSP.NS": {"name": "Apollo Hospitals",          "sector": "Pharma"},
+    # ── Auto ──────────────────────────────────────────────────────────────────
+    "TATAMOTORS.NS": {"name": "Tata Motors",               "sector": "Auto"},
+    "MARUTI.NS":     {"name": "Maruti Suzuki",             "sector": "Auto"},
+    "BAJAJ-AUTO.NS": {"name": "Bajaj Auto",                "sector": "Auto"},
+    "EICHERMOT.NS":  {"name": "Eicher Motors",             "sector": "Auto"},
+    "HEROMOTOCO.NS": {"name": "Hero MotoCorp",             "sector": "Auto"},
+    "M&M.NS":        {"name": "Mahindra & Mahindra",       "sector": "Auto"},
+    # ── FMCG ──────────────────────────────────────────────────────────────────
+    "HINDUNILVR.NS": {"name": "Hindustan Unilever",        "sector": "FMCG"},
+    "ITC.NS":        {"name": "ITC",                       "sector": "FMCG"},
+    "BRITANNIA.NS":  {"name": "Britannia Industries",      "sector": "FMCG"},
+    "NESTLEIND.NS":  {"name": "Nestle India",              "sector": "FMCG"},
+    "TATACONSUM.NS": {"name": "Tata Consumer Products",    "sector": "FMCG"},
+    # ── Infrastructure ────────────────────────────────────────────────────────
+    "LT.NS":         {"name": "Larsen & Toubro",           "sector": "Infra"},
+    "ULTRACEMCO.NS": {"name": "UltraTech Cement",          "sector": "Infra"},
+    "GRASIM.NS":     {"name": "Grasim Industries",         "sector": "Infra"},
+    "ADANIPORTS.NS": {"name": "Adani Ports",               "sector": "Infra"},
+    # ── Metals ────────────────────────────────────────────────────────────────
+    "TATASTEEL.NS":  {"name": "Tata Steel",                "sector": "Metals"},
+    "JSWSTEEL.NS":   {"name": "JSW Steel",                 "sector": "Metals"},
+    "HINDALCO.NS":   {"name": "Hindalco Industries",       "sector": "Metals"},
+    # ── Telecom ───────────────────────────────────────────────────────────────
+    "BHARTIARTL.NS": {"name": "Bharti Airtel",             "sector": "Telecom"},
+    # ── Others ────────────────────────────────────────────────────────────────
+    "TITAN.NS":      {"name": "Titan Company",             "sector": "Others"},
+    "TRENT.NS":      {"name": "Trent",                     "sector": "Others"},
+    "BEL.NS":        {"name": "Bharat Electronics",        "sector": "Others"},
+    "ASIANPAINT.NS": {"name": "Asian Paints",              "sector": "Others"},
 }
 
 _fetcher = None
@@ -99,12 +108,13 @@ async def _analyse_all(warmup: bool = False, deadline: float = 0) -> list:
     # Check cache first — return cached results without hitting yfinance
     symbols_to_fetch = {}
     cached_results = []
-    for symbol, name in INDIAN_STOCKS.items():
+    for symbol, info in INDIAN_STOCKS.items():
+        name = info["name"]
         cached = dynamo_cache.get_cached(symbol)
         if cached:
             cached_results.append(cached)
         else:
-            symbols_to_fetch[symbol] = name
+            symbols_to_fetch[symbol] = info
 
     # If everything is cached, return immediately
     if not symbols_to_fetch:
@@ -128,12 +138,14 @@ async def _analyse_all(warmup: bool = False, deadline: float = 0) -> list:
 
         # Analyse each fetched stock in this chunk
         analyse_tasks = []
-        for symbol, name in batch:
+        for symbol, info in batch:
+            name   = info["name"]
+            sector = info.get("sector", "Others")
             stock_data = batch_data.get(symbol)
             if not stock_data:
                 cached_results.append({"symbol": symbol, "name": name, "error": "No data available"})
                 continue
-            analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data))
+            analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data, sector=sector))
 
         if analyse_tasks:
             new_results = await asyncio.gather(*analyse_tasks)
@@ -142,8 +154,9 @@ async def _analyse_all(warmup: bool = False, deadline: float = 0) -> list:
     return cached_results
 
 
-async def _analyse_and_cache(symbol: str, name: str, stock_data: dict) -> dict:
-    result = await _agent.analyze(symbol, name, stock_data)
+async def _analyse_and_cache(symbol: str, name: str, stock_data: dict,
+                             sector: str = "Others") -> dict:
+    result = await _agent.analyze(symbol, name, stock_data, sector=sector)
     dynamo_cache.set_cached(symbol, result, ttl_seconds=900)
     return result
 
@@ -156,24 +169,27 @@ async def _analyse_page(page: int, per_page: int) -> list:
 
     results = []
     symbols_to_fetch = {}
-    for symbol, name in page_symbols:
+    for symbol, info in page_symbols:
+        name = info["name"]
         cached = dynamo_cache.get_cached(symbol)
         if cached:
             results.append(cached)
         else:
-            symbols_to_fetch[symbol] = name
+            symbols_to_fetch[symbol] = info
 
     if not symbols_to_fetch:
         return results
 
     batch_data = await _fetcher.get_batch_stock_data(list(symbols_to_fetch.keys()))
     analyse_tasks = []
-    for symbol, name in symbols_to_fetch.items():
+    for symbol, info in symbols_to_fetch.items():
+        name   = info["name"]
+        sector = info.get("sector", "Others")
         stock_data = batch_data.get(symbol)
         if not stock_data:
             results.append({"symbol": symbol, "name": name, "error": "No data available"})
             continue
-        analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data))
+        analyse_tasks.append(_analyse_and_cache(symbol, name, stock_data, sector=sector))
 
     if analyse_tasks:
         new_results = await asyncio.gather(*analyse_tasks)
@@ -196,14 +212,18 @@ def handler(event, context):
 
     # GET /api/stocks/list — static list, no API calls
     if "list" in raw_path:
-        return _json([{"symbol": s, "name": n} for s, n in INDIAN_STOCKS.items()])
+        return _json([
+            {"symbol": s, "name": info["name"], "sector": info["sector"]}
+            for s, info in INDIAN_STOCKS.items()
+        ])
 
     # GET /api/stock/{symbol} — single stock detail
     if path_params.get("symbol"):
         symbol = path_params["symbol"].upper()
         if not symbol.endswith(".NS"):
             symbol += ".NS"
-        name   = INDIAN_STOCKS.get(symbol, symbol.replace(".NS", ""))
+        info   = INDIAN_STOCKS.get(symbol, {})
+        name   = info.get("name", symbol.replace(".NS", "")) if info else symbol.replace(".NS", "")
         result = asyncio.run(_analyse_one(symbol, name))
         return _json(result)
 
