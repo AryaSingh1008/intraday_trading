@@ -13,27 +13,33 @@ from backend.data.stock_fetcher import StockFetcher
 from backend.agents.signal_agent import SignalAgent
 
 INDIAN_STOCKS = {
-    # ── IT ─────────────────────────────────────────────────────────────────────
+    # ── IT (8) ────────────────────────────────────────────────────────────────
     "TCS.NS":        {"name": "Tata Consultancy Services", "sector": "IT"},
     "INFY.NS":       {"name": "Infosys",                   "sector": "IT"},
     "WIPRO.NS":      {"name": "Wipro",                     "sector": "IT"},
     "HCLTECH.NS":    {"name": "HCL Technologies",          "sector": "IT"},
     "TECHM.NS":      {"name": "Tech Mahindra",             "sector": "IT"},
     "LTIM.NS":       {"name": "LTIMindtree",               "sector": "IT"},
-    # ── Banking ────────────────────────────────────────────────────────────────
+    "MPHASIS.NS":    {"name": "Mphasis",                   "sector": "IT"},
+    "PERSISTENT.NS": {"name": "Persistent Systems",        "sector": "IT"},
+    # ── Banking (8) ───────────────────────────────────────────────────────────
     "HDFCBANK.NS":   {"name": "HDFC Bank",                 "sector": "Banking"},
     "ICICIBANK.NS":  {"name": "ICICI Bank",                "sector": "Banking"},
     "SBIN.NS":       {"name": "State Bank of India",       "sector": "Banking"},
     "AXISBANK.NS":   {"name": "Axis Bank",                 "sector": "Banking"},
     "KOTAKBANK.NS":  {"name": "Kotak Mahindra Bank",       "sector": "Banking"},
     "INDUSINDBK.NS": {"name": "IndusInd Bank",             "sector": "Banking"},
-    # ── Finance ────────────────────────────────────────────────────────────────
+    "BANKBARODA.NS": {"name": "Bank of Baroda",            "sector": "Banking"},
+    "PNB.NS":        {"name": "Punjab National Bank",      "sector": "Banking"},
+    # ── Finance (7) ───────────────────────────────────────────────────────────
     "BAJFINANCE.NS": {"name": "Bajaj Finance",             "sector": "Finance"},
     "BAJAJFINSV.NS": {"name": "Bajaj Finserv",             "sector": "Finance"},
     "SHRIRAMFIN.NS": {"name": "Shriram Finance",           "sector": "Finance"},
     "JIOFIN.NS":     {"name": "Jio Financial Services",    "sector": "Finance"},
     "HDFCLIFE.NS":   {"name": "HDFC Life Insurance",       "sector": "Finance"},
-    # ── Energy ────────────────────────────────────────────────────────────────
+    "SBILIFE.NS":    {"name": "SBI Life Insurance",        "sector": "Finance"},
+    "ICICIPRULI.NS": {"name": "ICICI Prudential Life",     "sector": "Finance"},
+    # ── Energy (8) ────────────────────────────────────────────────────────────
     "RELIANCE.NS":   {"name": "Reliance Industries",       "sector": "Energy"},
     "ONGC.NS":       {"name": "ONGC",                      "sector": "Energy"},
     "BPCL.NS":       {"name": "Bharat Petroleum",          "sector": "Energy"},
@@ -41,40 +47,63 @@ INDIAN_STOCKS = {
     "POWERGRID.NS":  {"name": "Power Grid Corporation",    "sector": "Energy"},
     "COALINDIA.NS":  {"name": "Coal India",                "sector": "Energy"},
     "ADANIENT.NS":   {"name": "Adani Enterprises",         "sector": "Energy"},
-    # ── Pharma ────────────────────────────────────────────────────────────────
+    "ADANIGREEN.NS": {"name": "Adani Green Energy",        "sector": "Energy"},
+    # ── Pharma (7) ────────────────────────────────────────────────────────────
     "SUNPHARMA.NS":  {"name": "Sun Pharmaceutical",        "sector": "Pharma"},
     "CIPLA.NS":      {"name": "Cipla",                     "sector": "Pharma"},
     "DRREDDY.NS":    {"name": "Dr. Reddy's Laboratories",  "sector": "Pharma"},
     "APOLLOHOSP.NS": {"name": "Apollo Hospitals",          "sector": "Pharma"},
-    # ── Auto ──────────────────────────────────────────────────────────────────
+    "DIVISLAB.NS":   {"name": "Divi's Laboratories",       "sector": "Pharma"},
+    "BIOCON.NS":     {"name": "Biocon",                    "sector": "Pharma"},
+    "LUPIN.NS":      {"name": "Lupin",                     "sector": "Pharma"},
+    # ── Auto (8) ──────────────────────────────────────────────────────────────
     "TATAMOTORS.NS": {"name": "Tata Motors",               "sector": "Auto"},
     "MARUTI.NS":     {"name": "Maruti Suzuki",             "sector": "Auto"},
     "BAJAJ-AUTO.NS": {"name": "Bajaj Auto",                "sector": "Auto"},
     "EICHERMOT.NS":  {"name": "Eicher Motors",             "sector": "Auto"},
     "HEROMOTOCO.NS": {"name": "Hero MotoCorp",             "sector": "Auto"},
     "M&M.NS":        {"name": "Mahindra & Mahindra",       "sector": "Auto"},
-    # ── FMCG ──────────────────────────────────────────────────────────────────
+    "ASHOKLEY.NS":   {"name": "Ashok Leyland",             "sector": "Auto"},
+    "TVSMOTOR.NS":   {"name": "TVS Motor Company",         "sector": "Auto"},
+    # ── FMCG (8) ──────────────────────────────────────────────────────────────
     "HINDUNILVR.NS": {"name": "Hindustan Unilever",        "sector": "FMCG"},
     "ITC.NS":        {"name": "ITC",                       "sector": "FMCG"},
     "BRITANNIA.NS":  {"name": "Britannia Industries",      "sector": "FMCG"},
     "NESTLEIND.NS":  {"name": "Nestle India",              "sector": "FMCG"},
     "TATACONSUM.NS": {"name": "Tata Consumer Products",    "sector": "FMCG"},
-    # ── Infrastructure ────────────────────────────────────────────────────────
+    "DABUR.NS":      {"name": "Dabur India",               "sector": "FMCG"},
+    "MARICO.NS":     {"name": "Marico",                    "sector": "FMCG"},
+    "GODREJCP.NS":   {"name": "Godrej Consumer Products",  "sector": "FMCG"},
+    # ── Infrastructure (7) ────────────────────────────────────────────────────
     "LT.NS":         {"name": "Larsen & Toubro",           "sector": "Infra"},
     "ULTRACEMCO.NS": {"name": "UltraTech Cement",          "sector": "Infra"},
     "GRASIM.NS":     {"name": "Grasim Industries",         "sector": "Infra"},
     "ADANIPORTS.NS": {"name": "Adani Ports",               "sector": "Infra"},
-    # ── Metals ────────────────────────────────────────────────────────────────
+    "SIEMENS.NS":    {"name": "Siemens",                   "sector": "Infra"},
+    "ABB.NS":        {"name": "ABB India",                 "sector": "Infra"},
+    "HAVELLS.NS":    {"name": "Havells India",             "sector": "Infra"},
+    # ── Metals (6) ────────────────────────────────────────────────────────────
     "TATASTEEL.NS":  {"name": "Tata Steel",                "sector": "Metals"},
     "JSWSTEEL.NS":   {"name": "JSW Steel",                 "sector": "Metals"},
     "HINDALCO.NS":   {"name": "Hindalco Industries",       "sector": "Metals"},
-    # ── Telecom ───────────────────────────────────────────────────────────────
+    "VEDL.NS":       {"name": "Vedanta",                   "sector": "Metals"},
+    "NMDC.NS":       {"name": "NMDC",                      "sector": "Metals"},
+    "NATIONALUM.NS": {"name": "National Aluminium",        "sector": "Metals"},
+    # ── Telecom (4) ───────────────────────────────────────────────────────────
     "BHARTIARTL.NS": {"name": "Bharti Airtel",             "sector": "Telecom"},
-    # ── Others ────────────────────────────────────────────────────────────────
+    "IDEA.NS":       {"name": "Vodafone Idea",             "sector": "Telecom"},
+    "INDUSTOWER.NS": {"name": "Indus Towers",              "sector": "Telecom"},
+    "TATACOMM.NS":   {"name": "Tata Communications",       "sector": "Telecom"},
+    # ── Others (9) ────────────────────────────────────────────────────────────
     "TITAN.NS":      {"name": "Titan Company",             "sector": "Others"},
     "TRENT.NS":      {"name": "Trent",                     "sector": "Others"},
     "BEL.NS":        {"name": "Bharat Electronics",        "sector": "Others"},
     "ASIANPAINT.NS": {"name": "Asian Paints",              "sector": "Others"},
+    "PIDILITIND.NS": {"name": "Pidilite Industries",       "sector": "Others"},
+    "HAL.NS":        {"name": "Hindustan Aeronautics",     "sector": "Others"},
+    "IRCTC.NS":      {"name": "IRCTC",                     "sector": "Others"},
+    "ZOMATO.NS":     {"name": "Zomato",                    "sector": "Others"},
+    "DMART.NS":      {"name": "Avenue Supermarts (DMart)",  "sector": "Others"},
 }
 
 _fetcher = None
