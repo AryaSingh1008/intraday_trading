@@ -19,6 +19,7 @@
 """
 
 import asyncio
+import json
 import logging
 import re
 from typing import List, Optional, Tuple
@@ -27,6 +28,78 @@ from datetime import datetime, timezone, timedelta
 import feedparser
 from email.utils import parsedate_to_datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+# ── AI Headline Classifier (Amazon Nova Micro via Bedrock) ──────────────────
+_bedrock_client = None
+_AI_MODEL_ID = "us.amazon.nova-micro-v1:0"
+
+
+def _get_bedrock_client():
+    global _bedrock_client
+    if _bedrock_client is None:
+        try:
+            import boto3
+            _bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
+        except Exception:
+            pass
+    return _bedrock_client
+
+
+def _ai_classify_headlines(headlines: list) -> dict:
+    """
+    Send top headlines to Nova Micro for impact classification.
+    Returns {title: {"sentiment": "BULLISH"/"BEARISH"/"NEUTRAL", "impact": "HIGH"/"MEDIUM"/"LOW"}}
+    Falls back to empty dict on error (VADER scores used instead).
+    """
+    client = _get_bedrock_client()
+    if not client or not headlines:
+        return {}
+
+    titles = [h["title"] for h in headlines[:3]]
+    titles_str = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
+
+    prompt = f"""Classify each headline for Indian stock market impact.
+For each headline, return: sentiment (BULLISH/BEARISH/NEUTRAL) and impact (HIGH/MEDIUM/LOW).
+
+Headlines:
+{titles_str}
+
+Return ONLY a JSON array like: [{{"title_num":1,"sentiment":"BULLISH","impact":"HIGH"}}, ...]
+No explanation, no markdown."""
+
+    try:
+        response = client.invoke_model(
+            modelId=_AI_MODEL_ID,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "inferenceConfig": {"maxTokens": 256, "temperature": 0.1},
+                "messages": [{"role": "user", "content": [{"text": prompt}]}],
+            }),
+        )
+        body = json.loads(response["body"].read())
+        text = body.get("output", {}).get("message", {}).get("content", [{}])[0].get("text", "")
+
+        # Strip markdown fences
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+
+        items = json.loads(text.strip())
+        result = {}
+        for item in items:
+            idx = item.get("title_num", 0) - 1
+            if 0 <= idx < len(titles):
+                result[titles[idx]] = {
+                    "sentiment": item.get("sentiment", "NEUTRAL"),
+                    "impact": item.get("impact", "MEDIUM"),
+                }
+        return result
+    except Exception as e:
+        logging.getLogger(__name__).debug("AI headline classify failed (using VADER fallback): %s", e)
+        return {}
 
 # ── Stop words for title deduplication ────────────────────
 _STOP_WORDS = {
@@ -269,9 +342,10 @@ class SentimentAgent:
           • Pattern-based boosting for financial phrases VADER misses
           • Recency × source authority combined weight
           • Finance-domain VADER lexicon applied globally
+          • AI headline classification (Nova Micro) for top 3 headlines
         """
         urls            = self._build_feed_urls(symbol, company_name)
-        weighted_scores = []   # list of (compound_score, combined_weight)
+        scored_entries  = []   # list of {"title", "score", "weight"}
         reasons         = []
 
         for url in urls:
@@ -291,16 +365,38 @@ class SentimentAgent:
                     # Combined weight: recency × source authority
                     recency  = _recency_weight(entry.get("published", ""))
                     weight   = recency * authority
-                    weighted_scores.append((vs, weight))
+                    scored_entries.append({"title": title, "score": vs, "weight": weight})
             except Exception:
                 pass
 
-        if not weighted_scores:
+        if not scored_entries:
             return 0.0, ["No recent news found — neutral sentiment assumed"]
 
+        # ── AI headline classification (Nova Micro) ─────────────────────────
+        # Pick top 3 headlines by absolute VADER score and reclassify with AI.
+        # AI sentiment overrides VADER score; AI impact boosts weight.
+        try:
+            sorted_by_impact = sorted(scored_entries, key=lambda e: abs(e["score"]), reverse=True)
+            top3 = sorted_by_impact[:3]
+            ai_results = _ai_classify_headlines(top3)
+
+            if ai_results:
+                _AI_SENTIMENT_MAP = {"BULLISH": 0.6, "BEARISH": -0.6, "NEUTRAL": 0.0}
+                _AI_IMPACT_MAP   = {"HIGH": 1.8, "MEDIUM": 1.2, "LOW": 0.8}
+
+                for entry in scored_entries:
+                    ai = ai_results.get(entry["title"])
+                    if ai:
+                        # Override VADER score with AI sentiment
+                        entry["score"]  = _AI_SENTIMENT_MAP.get(ai["sentiment"], entry["score"])
+                        # Boost weight by AI impact level
+                        entry["weight"] *= _AI_IMPACT_MAP.get(ai["impact"], 1.0)
+        except Exception:
+            pass  # AI failed — VADER scores used as-is
+
         # Recency+authority-weighted average
-        total_weight = sum(w for _, w in weighted_scores)
-        avg_score    = sum(s * w for s, w in weighted_scores) / total_weight
+        total_weight = sum(e["weight"] for e in scored_entries)
+        avg_score    = sum(e["score"] * e["weight"] for e in scored_entries) / total_weight
 
         # Normalise from [-1,+1] → [-50,+50]
         normalised = round(avg_score * 50, 1)

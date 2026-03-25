@@ -72,7 +72,7 @@ async def _analyse(symbol: str) -> dict:
     if hist is None or hist.empty:
         return {"symbol": symbol, "error": "Insufficient historical data"}
 
-    tech_score, reasons = _agent.analyze(hist, current_price or 0, volume, avg_volume)
+    tech_score, reasons, _extras = _agent.analyze(hist, current_price or 0, volume, avg_volume)
 
     # Pre-compute price targets using Bollinger Bands + ATR so the agent
     # uses REAL values rather than hallucinating them.

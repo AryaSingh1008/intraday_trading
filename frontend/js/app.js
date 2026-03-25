@@ -18,7 +18,7 @@ let countdownTimer     = null;
 let countdownSecs      = 900;
 let knownStocks        = [];
 let currentPage        = 1;
-const STOCKS_PER_PAGE  = 10;
+const STOCKS_PER_PAGE  = 20;
 let backgroundLoadDone = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -619,11 +619,76 @@ async function showDetail(symbol) {
     const rEl = document.getElementById("modal-reasons");
     if (rEl) rEl.innerHTML = (s.reasons||[]).map(function(r) { return "<li>" + r + "</li>"; }).join("");
 
+    // ── AI Analysis section ──────────────────────────────────────────────────
+    _renderAIAnalysis(s);
+
     _syncModalWishBtn();
   } catch (e) {
     setEl("modal-title", "Error");
     setEl("modal-explanation", "Could not load stock details. Please try again.");
     console.error(e);
+  }
+}
+
+function _renderAIAnalysis(s) {
+  var section = document.getElementById("ai-analysis-section");
+  if (!section) return;
+
+  if (!s.ai_available) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "block";
+
+  // Confidence dots
+  var confEl = document.getElementById("ai-confidence");
+  if (confEl) {
+    var conf = (s.ai_confidence || "").toUpperCase();
+    var dots = conf === "HIGH" ? "●●●" : conf === "MEDIUM" ? "●●○" : "●○○";
+    var confClass = conf === "HIGH" ? "conf-high" : conf === "MEDIUM" ? "conf-med" : "conf-low";
+    confEl.className = "ai-confidence-label " + confClass;
+    confEl.textContent = dots + " " + conf + " confidence";
+  }
+
+  // Agrees / disagrees badge
+  var agreeEl = document.getElementById("ai-agrees");
+  if (agreeEl) {
+    if (s.ai_signal_agrees === true) {
+      agreeEl.className = "ai-agrees-label ai-agrees-yes";
+      agreeEl.textContent = "✅ AI agrees with " + (s.signal || "signal");
+    } else if (s.ai_signal_agrees === false) {
+      agreeEl.className = "ai-agrees-label ai-agrees-no";
+      agreeEl.textContent = "⚠️ AI disagrees with " + (s.signal || "signal");
+    } else {
+      agreeEl.textContent = "";
+    }
+  }
+
+  // Thesis
+  setEl("ai-thesis", s.ai_thesis || "");
+
+  // Risk flags
+  var flagsWrap = document.getElementById("ai-risk-flags");
+  var flagsList = document.getElementById("ai-risk-flags-list");
+  if (flagsWrap && flagsList) {
+    if (s.ai_risk_flags && s.ai_risk_flags.length > 0) {
+      flagsWrap.style.display = "block";
+      flagsList.innerHTML = s.ai_risk_flags.map(function(f) { return "<li>" + f + "</li>"; }).join("");
+    } else {
+      flagsWrap.style.display = "none";
+    }
+  }
+
+  // Contradictions
+  var contrWrap = document.getElementById("ai-contradictions");
+  var contrList = document.getElementById("ai-contradictions-list");
+  if (contrWrap && contrList) {
+    if (s.ai_contradictions && s.ai_contradictions.length > 0) {
+      contrWrap.style.display = "block";
+      contrList.innerHTML = s.ai_contradictions.map(function(f) { return "<li>" + f + "</li>"; }).join("");
+    } else {
+      contrWrap.style.display = "none";
+    }
   }
 }
 
