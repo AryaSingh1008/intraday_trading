@@ -82,21 +82,68 @@ excel_exporter  = ExcelExporter()
 
 # ── Indian Stock List ─────────────────────────────────────
 INDIAN_STOCKS = {
-    "RELIANCE.NS":   "Reliance Industries",
-    "TCS.NS":        "TCS",
-    "INFY.NS":       "Infosys",
-    "HDFCBANK.NS":   "HDFC Bank",
-    "ICICIBANK.NS":  "ICICI Bank",
-    "WIPRO.NS":      "Wipro",
-    "TATAMOTORS.NS": "Tata Motors",
-    "SBIN.NS":       "SBI",
-    "AXISBANK.NS":   "Axis Bank",
-    "KOTAKBANK.NS":  "Kotak Bank",
-    "BAJFINANCE.NS": "Bajaj Finance",
-    "SUNPHARMA.NS":  "Sun Pharma",
-    "MARUTI.NS":     "Maruti Suzuki",
-    "LT.NS":         "L&T",
-    "ONGC.NS":       "ONGC",
+    # IT
+    "TCS.NS":        {"name": "Tata Consultancy Services", "sector": "IT"},
+    "INFY.NS":       {"name": "Infosys",                   "sector": "IT"},
+    "WIPRO.NS":      {"name": "Wipro",                     "sector": "IT"},
+    "HCLTECH.NS":    {"name": "HCL Technologies",          "sector": "IT"},
+    "TECHM.NS":      {"name": "Tech Mahindra",             "sector": "IT"},
+    "LTIM.NS":       {"name": "LTIMindtree",               "sector": "IT"},
+    # Banking
+    "HDFCBANK.NS":   {"name": "HDFC Bank",                 "sector": "Banking"},
+    "ICICIBANK.NS":  {"name": "ICICI Bank",                "sector": "Banking"},
+    "SBIN.NS":       {"name": "State Bank of India",       "sector": "Banking"},
+    "AXISBANK.NS":   {"name": "Axis Bank",                 "sector": "Banking"},
+    "KOTAKBANK.NS":  {"name": "Kotak Mahindra Bank",       "sector": "Banking"},
+    "INDUSINDBK.NS": {"name": "IndusInd Bank",             "sector": "Banking"},
+    # Finance
+    "BAJFINANCE.NS": {"name": "Bajaj Finance",             "sector": "Finance"},
+    "BAJAJFINSV.NS": {"name": "Bajaj Finserv",             "sector": "Finance"},
+    "SHRIRAMFIN.NS": {"name": "Shriram Finance",           "sector": "Finance"},
+    "JIOFIN.NS":     {"name": "Jio Financial Services",    "sector": "Finance"},
+    "HDFCLIFE.NS":   {"name": "HDFC Life Insurance",       "sector": "Finance"},
+    # Energy
+    "RELIANCE.NS":   {"name": "Reliance Industries",       "sector": "Energy"},
+    "ONGC.NS":       {"name": "ONGC",                      "sector": "Energy"},
+    "BPCL.NS":       {"name": "Bharat Petroleum",          "sector": "Energy"},
+    "NTPC.NS":       {"name": "NTPC",                      "sector": "Energy"},
+    "POWERGRID.NS":  {"name": "Power Grid Corporation",    "sector": "Energy"},
+    "COALINDIA.NS":  {"name": "Coal India",                "sector": "Energy"},
+    "ADANIENT.NS":   {"name": "Adani Enterprises",         "sector": "Energy"},
+    # Pharma
+    "SUNPHARMA.NS":  {"name": "Sun Pharmaceutical",        "sector": "Pharma"},
+    "CIPLA.NS":      {"name": "Cipla",                     "sector": "Pharma"},
+    "DRREDDY.NS":    {"name": "Dr. Reddy's Laboratories",  "sector": "Pharma"},
+    "APOLLOHOSP.NS": {"name": "Apollo Hospitals",          "sector": "Pharma"},
+    # Auto
+    "TATAMOTORS.NS": {"name": "Tata Motors",               "sector": "Auto"},
+    "MARUTI.NS":     {"name": "Maruti Suzuki",             "sector": "Auto"},
+    "BAJAJ-AUTO.NS": {"name": "Bajaj Auto",                "sector": "Auto"},
+    "EICHERMOT.NS":  {"name": "Eicher Motors",             "sector": "Auto"},
+    "HEROMOTOCO.NS": {"name": "Hero MotoCorp",             "sector": "Auto"},
+    "M&M.NS":        {"name": "Mahindra & Mahindra",       "sector": "Auto"},
+    # FMCG
+    "HINDUNILVR.NS": {"name": "Hindustan Unilever",        "sector": "FMCG"},
+    "ITC.NS":        {"name": "ITC",                       "sector": "FMCG"},
+    "BRITANNIA.NS":  {"name": "Britannia Industries",      "sector": "FMCG"},
+    "NESTLEIND.NS":  {"name": "Nestle India",              "sector": "FMCG"},
+    "TATACONSUM.NS": {"name": "Tata Consumer Products",    "sector": "FMCG"},
+    # Infra
+    "LT.NS":         {"name": "Larsen & Toubro",           "sector": "Infra"},
+    "ULTRACEMCO.NS": {"name": "UltraTech Cement",          "sector": "Infra"},
+    "GRASIM.NS":     {"name": "Grasim Industries",         "sector": "Infra"},
+    "ADANIPORTS.NS": {"name": "Adani Ports",               "sector": "Infra"},
+    # Metals
+    "TATASTEEL.NS":  {"name": "Tata Steel",                "sector": "Metals"},
+    "JSWSTEEL.NS":   {"name": "JSW Steel",                 "sector": "Metals"},
+    "HINDALCO.NS":   {"name": "Hindalco Industries",       "sector": "Metals"},
+    # Telecom
+    "BHARTIARTL.NS": {"name": "Bharti Airtel",             "sector": "Telecom"},
+    # Others
+    "TITAN.NS":      {"name": "Titan Company",             "sector": "Others"},
+    "TRENT.NS":      {"name": "Trent",                     "sector": "Others"},
+    "BEL.NS":        {"name": "Bharat Electronics",        "sector": "Others"},
+    "ASIANPAINT.NS": {"name": "Asian Paints",              "sector": "Others"},
 }
 
 # ── Options instruments ────────────────────────────────────
@@ -143,7 +190,9 @@ async def get_stocks(page: int = 0, per_page: int = 0):
 
     results = []
 
-    for symbol, name in stock_items:
+    for symbol, info in stock_items:
+        name   = info["name"]
+        sector = info.get("sector", "Others")
         cache_key = symbol
         try:
             if _is_cached(cache_key):
@@ -152,7 +201,7 @@ async def get_stocks(page: int = 0, per_page: int = 0):
 
             stock_data = await stock_fetcher.get_stock_data(symbol)
             if stock_data:
-                signal = await signal_agent.analyze(symbol, name, stock_data)
+                signal = await signal_agent.analyze(symbol, name, stock_data, sector=sector)
                 _cache[cache_key] = signal
                 _cache_ts[cache_key] = datetime.now().timestamp()
                 results.append(signal)
@@ -182,8 +231,10 @@ async def get_stock_detail(symbol: str):
         stock_data = await stock_fetcher.get_stock_data(symbol.upper())
         if not stock_data:
             raise HTTPException(status_code=404, detail=f"No data for {symbol}")
-        name = INDIAN_STOCKS.get(symbol.upper(), symbol.upper())
-        return await signal_agent.analyze(symbol.upper(), name, stock_data)
+        info   = INDIAN_STOCKS.get(symbol.upper(), {})
+        name   = info.get("name", symbol.upper()) if info else symbol.upper()
+        sector = info.get("sector", "Others") if info else "Others"
+        return await signal_agent.analyze(symbol.upper(), name, stock_data, sector=sector)
     except HTTPException:
         raise
     except Exception as e:
@@ -246,8 +297,8 @@ async def list_stocks():
     """Return the full known-stock list for autocomplete."""
     return {
         "stocks": [
-            {"symbol": sym, "name": name}
-            for sym, name in INDIAN_STOCKS.items()
+            {"symbol": sym, "name": info["name"], "sector": info["sector"]}
+            for sym, info in INDIAN_STOCKS.items()
         ]
     }
 
@@ -310,7 +361,8 @@ async def get_wishlist():
 
     for item in items:
         symbol = item["symbol"]
-        name   = item.get("name") or INDIAN_STOCKS.get(symbol, symbol)
+        _info  = INDIAN_STOCKS.get(symbol, {})
+        name   = item.get("name") or (_info.get("name") if _info else symbol)
         cache_key = symbol
         try:
             if _is_cached(cache_key):
@@ -321,7 +373,7 @@ async def get_wishlist():
 
             stock_data = await stock_fetcher.get_stock_data(symbol)
             if stock_data:
-                signal = await signal_agent.analyze(symbol, name, stock_data)
+                signal = await signal_agent.analyze(symbol, name, stock_data, sector=sector)
                 _cache[cache_key]    = signal
                 _cache_ts[cache_key] = datetime.now().timestamp()
                 entry = dict(signal)
@@ -344,7 +396,8 @@ async def get_wishlist():
 @app.post("/api/wishlist")
 async def add_to_wishlist(item: WishlistItem):
     """Add a stock to the wishlist."""
-    name = item.name or INDIAN_STOCKS.get(item.symbol.upper(), item.symbol.upper())
+    _info = INDIAN_STOCKS.get(item.symbol.upper(), {})
+    name  = item.name or (_info.get("name") if _info else item.symbol.upper())
     added = wishlist_store.add(item.symbol, name)
     if not added:
         return {"message": f"{item.symbol} is already in your wishlist.", "already_exists": True}

@@ -8,7 +8,9 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let allStocks          = [];
 let activeFilter       = "ALL";
+let activeSector       = "ALL";
 let modalChart         = null;
+let currentModalData   = null;   // stores last-loaded stock detail for chart TF switching
 let wishlistSymbols    = new Set();
 let currentModalSymbol = null;
 let currentTab         = "intraday";
@@ -324,13 +326,24 @@ function renderStocks() {
   const grid = document.getElementById("stock-grid");
   if (!grid) return;
 
-  const filtered = activeFilter === "ALL" ? allStocks
-    : allStocks.filter(function(s) {
-        const sig = s.signal || "HOLD";
-        if (activeFilter === "BUY")  return sig.indexOf("BUY")  >= 0;
-        if (activeFilter === "SELL") return sig.indexOf("SELL") >= 0;
-        return sig === "HOLD";
-      });
+  let filtered = allStocks;
+
+  // Signal filter
+  if (activeFilter !== "ALL") {
+    filtered = filtered.filter(function(s) {
+      const sig = s.signal || "HOLD";
+      if (activeFilter === "BUY")  return sig.indexOf("BUY")  >= 0;
+      if (activeFilter === "SELL") return sig.indexOf("SELL") >= 0;
+      return sig === "HOLD";
+    });
+  }
+
+  // Sector filter
+  if (activeSector !== "ALL") {
+    filtered = filtered.filter(function(s) {
+      return (s.sector || "Others") === activeSector;
+    });
+  }
 
   if (!filtered.length) {
     grid.innerHTML = '<div class="col-12 text-center text-muted py-4">No stocks match this filter.</div>';
@@ -467,6 +480,17 @@ function stockCard(s, fromWishlist) {
     + s.symbol + '\',\'' + safeName + '\',' + (s.current_price || 0) + ',event)">'
     + '<i class="bi bi-plus-circle me-1"></i>Add to Portfolio</button>';
 
+  // RS ratio badge
+  var rsBadge = "";
+  if (s.rs_ratio != null) {
+    var rsClass = s.rs_ratio >= 1.0 ? "rs-badge-up" : "rs-badge-down";
+    var rsArrow = s.rs_ratio >= 1.0 ? "▲" : "▼";
+    rsBadge = '<span class="rs-badge ' + rsClass + '">' + rsArrow + ' RS ' + s.rs_ratio.toFixed(2) + '</span>';
+  }
+
+  // Sector badge
+  var sectorBadge = s.sector ? '<span class="sector-badge">' + s.sector + '</span>' : "";
+
   return '<div class="col-12 col-sm-6 col-lg-4">'
     + '<div class="stock-card signal-' + sigClass + '" onclick="showDetail(\'' + s.symbol + '\')">'
     + '<div class="card-band ' + bandCls + '"></div>'
@@ -476,14 +500,17 @@ function stockCard(s, fromWishlist) {
     + '<div class="card-body-inner">'
     + '<div class="d-flex justify-content-between align-items-start mb-2">'
     + '<div><div class="stock-name">' + (s.name||s.symbol) + '</div>'
-    + '<div class="stock-symbol">' + s.symbol + '</div></div>'
+    + '<div class="stock-symbol">' + s.symbol + ' ' + sectorBadge + '</div></div>'
     + '<span class="signal-badge ' + sig + '">' + (s.signal_emoji||"") + " " + sig + '</span>'
     + '</div>'
     + '<div class="stock-price mb-1">₹' + fmt(s.current_price)
     + ' <span class="stock-change ' + chgCls + '">' + chgArrow + " " + Math.abs(chg).toFixed(2) + '%</span></div>'
     + '<div class="d-flex justify-content-between align-items-center mb-2">'
     + '<small class="text-muted">AI Score: <strong>' + (s.score||0) + '/100</strong></small>'
+    + '<div class="d-flex gap-1 align-items-center">'
+    + rsBadge
     + '<span class="risk-pill risk-' + (s.risk||"MEDIUM") + '">' + (s.risk||"MEDIUM") + ' RISK</span>'
+    + '</div>'
     + '</div>'
     + scoreBar
     + targetHtml
@@ -498,6 +525,14 @@ function filterStocks(filter, btn) {
   activeFilter = filter;
   currentPage = 1;
   document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
+  if (btn) btn.classList.add("active");
+  renderStocks();
+}
+
+function filterSector(sector, btn) {
+  activeSector = sector;
+  currentPage = 1;
+  document.querySelectorAll(".btn-filter-sector").forEach(function(b) { b.classList.remove("active"); });
   if (btn) btn.classList.add("active");
   renderStocks();
 }
@@ -519,9 +554,15 @@ async function showDetail(symbol) {
     const r = await fetch("/api/stock/" + symbol);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const s = await r.json();
+    currentModalData = s;  // store for chart TF switching
+
+    // Reset chart TF buttons to 15m
+    document.querySelectorAll(".btn-tf").forEach(function(b) { b.classList.remove("active"); });
+    const tf15 = document.querySelector(".btn-tf[onclick*=\"'15m'\"]");
+    if (tf15) tf15.classList.add("active");
 
     setEl("modal-title", s.name || symbol);
-    setEl("modal-subtitle", symbol);
+    setEl("modal-subtitle", symbol + (s.sector ? "  •  " + s.sector : ""));
     setEl("modal-explanation", s.explanation || "");
 
     const banner = document.getElementById("modal-signal-banner");
@@ -549,10 +590,22 @@ async function showDetail(symbol) {
       { v: fmtVol(s.volume),                           l: "Volume"          },
       { v: fmtVol(s.avg_volume),                       l: "Avg Volume"      },
     ];
+    // VWAP
+    if (s.vwap)  stats.push({ v: "₹" + fmt(s.vwap),  l: "📊 VWAP (today)"  });
+    // Support/resistance
+    if (s.support_level)    stats.push({ v: "₹" + fmt(s.support_level),    l: "🟩 Support (S1)"   });
+    if (s.resistance_level) stats.push({ v: "₹" + fmt(s.resistance_level), l: "🟥 Resistance (R1)"});
+    // RS ratio
+    if (s.rs_ratio != null) {
+      const rsLabel = s.rs_ratio >= 1.0 ? "▲ Outperforming" : "▼ Underperforming";
+      stats.push({ v: s.rs_ratio.toFixed(2) + "x  " + rsLabel, l: "📈 RS vs NIFTY 50" });
+    }
     // Target price entries (only shown when present)
     if (s.target_price)     stats.push({ v: "₹" + fmt(s.target_price),     l: "🎯 Target Price"    });
     if (s.stop_loss)        stats.push({ v: "₹" + fmt(s.stop_loss),         l: "🛑 Stop Loss"       });
     if (s.target_buy_price) stats.push({ v: "₹" + fmt(s.target_buy_price),  l: "💡 Re-entry Target" });
+    // Position sizing
+    if (s.suggested_qty)    stats.push({ v: s.suggested_qty + " shares  (₹" + fmt(s.risk_amount) + " at risk)", l: "📐 Suggested Qty" });
     const statsEl = document.getElementById("modal-stats");
     if (statsEl) statsEl.innerHTML = stats.map(function(st) {
       return '<div class="col-6 col-md-4"><div class="stat-box">'
@@ -574,24 +627,56 @@ async function showDetail(symbol) {
   }
 }
 
-function renderModalChart(s) {
+function switchChartTF(tf, btn) {
+  if (!currentModalData) return;
+  document.querySelectorAll(".btn-tf").forEach(function(b) { b.classList.remove("active"); });
+  if (btn) btn.classList.add("active");
+  renderModalChart(currentModalData, tf);
+}
+
+function renderModalChart(s, tf) {
+  tf = tf || "15m";
   const ctx = document.getElementById("modal-chart");
   if (!ctx) return;
   if (modalChart) { modalChart.destroy(); modalChart = null; }
 
-  // Backend returns intraday as [{time, price}, ...] array
-  let prices = [], labels = [];
-  if (Array.isArray(s.intraday) && s.intraday.length) {
-    prices = s.intraday.map(function(d) { return d.price; });
-    labels = s.intraday.map(function(d) { return d.time;  });
-  } else if (s.intraday && s.intraday.prices) {
-    prices = s.intraday.prices;
-    labels = s.intraday.labels || [];
+  let prices = [], labels = [], noteText = "";
+
+  if (tf === "daily" && Array.isArray(s.daily_chart) && s.daily_chart.length) {
+    prices    = s.daily_chart.map(function(d) { return d.price; });
+    labels    = s.daily_chart.map(function(d) { return d.date;  });
+    noteText  = "Showing " + prices.length + " daily candles (1 year)";
+  } else if (tf === "1h" && Array.isArray(s.intraday) && s.intraday.length) {
+    // Aggregate 15m bars into 1H candles (group every 4 bars)
+    var bars = s.intraday;
+    for (var i = 0; i < bars.length; i += 4) {
+      var group = bars.slice(i, i + 4);
+      if (group.length === 0) continue;
+      prices.push(group[group.length - 1].price || group[group.length - 1].close);
+      // Extract HH:MM from the time string
+      var t = group[0].time || "";
+      labels.push(t.substring(11, 16) || t.substring(0, 5));
+    }
+    noteText = "Showing " + prices.length + " hourly bars (1H aggregated)";
+  } else {
+    // Default: 15m intraday
+    if (Array.isArray(s.intraday) && s.intraday.length) {
+      prices = s.intraday.map(function(d) { return d.price || d.close; });
+      labels = s.intraday.map(function(d) {
+        var t = d.time || "";
+        return t.substring(11, 16) || t.substring(0, 5) || t;
+      });
+    } else if (s.intraday && s.intraday.prices) {
+      prices = s.intraday.prices;
+      labels = s.intraday.labels || [];
+    }
+    noteText = "Showing " + prices.length + " data points (15-min intervals)";
   }
-  const note   = document.getElementById("chart-note");
+
+  const note = document.getElementById("chart-note");
 
   if (!prices.length) {
-    if (note) note.textContent = "No intraday data available for today.";
+    if (note) note.textContent = tf === "daily" ? "No daily chart data available." : "No intraday data available for today.";
     return;
   }
 
@@ -614,12 +699,12 @@ function renderModalChart(s) {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { maxTicksLimit: 6, font: { size: 11 } } },
+        x: { ticks: { maxTicksLimit: tf === "daily" ? 8 : 6, font: { size: 11 } } },
         y: { ticks: { callback: function(v) { return "₹" + v.toLocaleString("en-IN"); } } },
       },
     },
   });
-  if (note) note.textContent = "Showing " + prices.length + " data points (15-min intervals)";
+  if (note) note.textContent = noteText;
 }
 
 function exportExcel() {

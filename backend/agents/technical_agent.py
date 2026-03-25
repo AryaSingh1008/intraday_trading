@@ -5,19 +5,21 @@
   Calculates classic technical indicators and
   returns a score between 0 (very bearish) and
   100 (very bullish), plus a list of plain-English
-  reason strings.
+  reason strings, plus an extras dict.
 
   Indicators used (all FREE, from 'ta' library):
-    • RSI            – momentum oscillator
+    • RSI            – momentum oscillator (ADX-aware)
     • Stochastic RSI – refined momentum (K/D crossovers)
     • MACD           – trend/momentum
     • ADX            – trend strength (+DI / -DI)
     • Bollinger Bands – volatility
     • SMA 20, 50 & 200 – trend direction + long-term filter
     • EMA 9 & 21     – short-term crossover
-    • Golden/Death Cross – 50-day vs 200-day SMA crossover
+    • Golden/Death Cross – 50-day vs 200-day SMA (20-day lookback + volume confirm)
     • Volume z-score – confirms moves
     • ATR            – volatility context
+    • VWAP           – intraday fair value (from 15m OHLCV)
+    • Support/Resistance – pivot points + swing levels
 ====================================================
 """
 
@@ -33,15 +35,19 @@ logger = logging.getLogger(__name__)
 class TechnicalAgent:
 
     def analyze(self, hist: pd.DataFrame, current_price: float,
-                volume: int, avg_volume: int) -> Tuple[float, List[str]]:
+                volume: int, avg_volume: int,
+                intraday: list = None) -> Tuple[float, List[str], dict]:
         """
-        Returns (score 0-100, list_of_reasons).
+        Returns (score 0-100, list_of_reasons, extras_dict).
         score > 65  →  BUY territory
         score 35-65 →  HOLD territory
         score < 35  →  SELL territory
+
+        extras_dict contains: vwap, support_level, resistance_level, atr
         """
         score   = 50.0   # neutral starting point
         reasons = []
+        extras  = {"vwap": None, "support_level": None, "resistance_level": None, "atr": None}
 
         try:
             close  = hist["Close"].astype(float)
@@ -49,25 +55,42 @@ class TechnicalAgent:
             low    = hist["Low"].astype(float)
             vol    = hist["Volume"].astype(float)
 
-            # ── 1.  RSI (14) ─────────────────────────────────
+            # ── 0. ADX (computed FIRST — used to context RSI scoring) ──────────
+            adx_val, plus_di, minus_di = self._adx(high, low, close)
+
+            # ── 1.  RSI (14) — ADX-aware ──────────────────────────────────────
             rsi = self._rsi(close, 14)
             if rsi is not None:
+                strong_uptrend   = adx_val is not None and adx_val > 30 and plus_di  > minus_di
+                strong_downtrend = adx_val is not None and adx_val > 30 and minus_di > plus_di
+                weak_trend       = adx_val is None or adx_val < 25
+
                 if rsi < 30:
-                    score += 20
-                    reasons.append(f"RSI is {rsi:.0f} — oversold zone (below 30)")
+                    if strong_downtrend:
+                        # Oversold in a strong downtrend — bearish confirmation, not a buy
+                        score -= 5
+                        reasons.append(f"RSI is {rsi:.0f} — oversold but strong downtrend (ADX {adx_val:.0f}) confirms selling pressure")
+                    else:
+                        score += 20
+                        reasons.append(f"RSI is {rsi:.0f} — oversold zone (below 30)")
                 elif rsi < 40:
                     score += 10
                     reasons.append(f"RSI is {rsi:.0f} — slightly oversold (30–40)")
                 elif rsi > 70:
-                    score -= 20
-                    reasons.append(f"RSI is {rsi:.0f} — overbought zone (above 70)")
+                    if strong_uptrend:
+                        # Overbought in a strong uptrend — bullish confirmation, NOT a sell
+                        score += 5
+                        reasons.append(f"RSI is {rsi:.0f} — overbought but strong uptrend (ADX {adx_val:.0f}) confirms buying strength")
+                    else:
+                        score -= 20
+                        reasons.append(f"RSI is {rsi:.0f} — overbought zone (above 70)")
                 elif rsi > 60:
                     score -= 10
                     reasons.append(f"RSI is {rsi:.0f} — slightly overbought (60–70)")
                 else:
                     reasons.append(f"RSI is {rsi:.0f} — neutral zone")
 
-            # ── 1b. RSI Divergence ────────────────────────────
+            # ── 1b. RSI Divergence ────────────────────────────────────────────
             div_type, div_reason = self._detect_divergence(close)
             if div_type == "bullish":
                 score += 12
@@ -76,7 +99,7 @@ class TechnicalAgent:
                 score -= 12
                 reasons.append(div_reason)
 
-            # ── 1c. Stochastic RSI ────────────────────────────
+            # ── 1c. Stochastic RSI ────────────────────────────────────────────
             stoch_k, stoch_d, stoch_reason = self._stoch_rsi(close)
             if stoch_k is not None:
                 if stoch_k < 20 and stoch_d < 20:
@@ -92,7 +115,7 @@ class TechnicalAgent:
                     score -= 4
                     reasons.append(stoch_reason)
 
-            # ── 2.  MACD (12, 26, 9) ─────────────────────────
+            # ── 2.  MACD (12, 26, 9) ──────────────────────────────────────────
             macd_line, signal_line = self._macd(close)
             if macd_line is not None and signal_line is not None:
                 if macd_line > signal_line:
@@ -102,7 +125,7 @@ class TechnicalAgent:
                     score -= 15
                     reasons.append("MACD is below signal line — downward momentum")
 
-            # ── 3.  Bollinger Bands (20, 2σ) ─────────────────
+            # ── 3.  Bollinger Bands (20, 2σ) ──────────────────────────────────
             upper, middle, lower = self._bollinger(close, 20)
             if upper is not None:
                 band_width = upper - lower
@@ -121,7 +144,7 @@ class TechnicalAgent:
                         score -= 8
                         reasons.append("Price is near upper Bollinger Band — close to upper resistance")
 
-            # ── 4.  Moving Averages (SMA 20 & SMA 50) ────────
+            # ── 4.  Moving Averages (SMA 20 & SMA 50) ─────────────────────────
             if len(close) >= 50:
                 sma20 = float(close.rolling(20).mean().iloc[-1])
                 sma50 = float(close.rolling(50).mean().iloc[-1])
@@ -140,7 +163,7 @@ class TechnicalAgent:
                     score -= 5
                     reasons.append("Current price is below 20-day average — negative momentum")
 
-            # ── 4a-ii.  200-day SMA (long-term trend filter) ──
+            # ── 4a-ii.  200-day SMA (long-term trend filter) ──────────────────
             if len(close) >= 200:
                 sma200 = float(close.rolling(200).mean().iloc[-1])
                 if current_price > sma200:
@@ -150,19 +173,36 @@ class TechnicalAgent:
                     score -= 8
                     reasons.append("Price is below 200-day SMA — long-term downtrend warning")
 
-                # Golden Cross / Death Cross (50-day vs 200-day)
-                if len(close) >= 200:
-                    sma50_now  = float(close.rolling(50).mean().iloc[-1])
-                    sma50_prev = float(close.rolling(50).mean().iloc[-5]) if len(close) > 54 else sma50_now
-                    sma200_prev = float(close.rolling(200).mean().iloc[-5]) if len(close) > 204 else sma200
-                    if sma50_now > sma200 and sma50_prev <= sma200_prev:
-                        score += 12
-                        reasons.append("Golden Cross detected — 50-day SMA crossed above 200-day SMA (strong bullish)")
-                    elif sma50_now < sma200 and sma50_prev >= sma200_prev:
-                        score -= 12
-                        reasons.append("Death Cross detected — 50-day SMA crossed below 200-day SMA (strong bearish)")
+                # Golden Cross / Death Cross — 20-day lookback + volume confirmation
+                if len(close) >= 220:
+                    sma50_now   = float(close.rolling(50).mean().iloc[-1])
+                    sma50_prev  = float(close.rolling(50).mean().iloc[-20])
+                    sma200_prev = float(close.rolling(200).mean().iloc[-20])
 
-            # ── 4b. EMA 9 & EMA 21 Crossover ─────────────────
+                    # Volume confirmation: was yesterday's volume z-score elevated?
+                    vol_zscore_cross = 0.0
+                    if len(vol) >= 20:
+                        vol_mean = float(vol.rolling(20).mean().iloc[-1])
+                        vol_std  = float(vol.rolling(20).std().iloc[-1])
+                        if vol_std > 0:
+                            vol_zscore_cross = (float(vol.iloc[-1]) - vol_mean) / vol_std
+
+                    cross_pts = 12 if vol_zscore_cross > 1.0 else 6  # full pts if confirmed by volume
+
+                    if sma50_now > sma200 and sma50_prev <= sma200_prev:
+                        score += cross_pts
+                        reasons.append(
+                            "Golden Cross detected — 50-day SMA crossed above 200-day SMA (strong bullish)"
+                            + (" — volume confirmed" if vol_zscore_cross > 1.0 else "")
+                        )
+                    elif sma50_now < sma200 and sma50_prev >= sma200_prev:
+                        score -= cross_pts
+                        reasons.append(
+                            "Death Cross detected — 50-day SMA crossed below 200-day SMA (strong bearish)"
+                            + (" — volume confirmed" if vol_zscore_cross > 1.0 else "")
+                        )
+
+            # ── 4b. EMA 9 & EMA 21 Crossover ──────────────────────────────────
             if len(close) >= 21:
                 ema9  = close.ewm(span=9,  adjust=False).mean()
                 ema21 = close.ewm(span=21, adjust=False).mean()
@@ -184,7 +224,7 @@ class TechnicalAgent:
                         score -= 8
                         reasons.append("EMA 9 is below EMA 21 — short-term downtrend confirmed")
 
-            # ── 5.  Volume confirmation (z-score) ─────────────
+            # ── 5.  Volume confirmation (z-score) ──────────────────────────────
             if len(vol) >= 20 and avg_volume > 0:
                 vol_mean   = float(vol.rolling(20).mean().iloc[-1])
                 vol_std    = float(vol.rolling(20).std().iloc[-1])
@@ -210,8 +250,7 @@ class TechnicalAgent:
                 elif vol_zscore <= -1.0:
                     reasons.append("Below-average volume — move lacks conviction, treat signals with caution")
 
-            # ── 5b. ADX – trend strength ──────────────────────
-            adx_val, plus_di, minus_di = self._adx(high, low, close)
+            # ── 5b. ADX – trend strength (scoring block, after RSI uses it above) ──
             if adx_val is not None:
                 if adx_val > 25:
                     if plus_di > minus_di:
@@ -232,8 +271,9 @@ class TechnicalAgent:
                         f"RSI and Stochastic signals more reliable than trend-following here."
                     )
 
-            # ── 6.  ATR volatility context ─────────────────────
+            # ── 6.  ATR volatility context ──────────────────────────────────────
             atr = self._atr(high, low, close)
+            extras["atr"] = atr
             if atr is not None and current_price > 0:
                 atr_pct = round((atr / current_price) * 100, 2)
                 if atr_pct > 3.0:
@@ -241,13 +281,55 @@ class TechnicalAgent:
                 elif atr_pct < 1.0:
                     reasons.append(f"Low volatility stock (ATR: {atr_pct}% of price) — tight, stable moves expected")
 
+            # ── 7.  VWAP — intraday fair value ─────────────────────────────────
+            vwap_val = self._vwap(intraday) if intraday else None
+            extras["vwap"] = vwap_val
+            if vwap_val is not None and current_price > 0:
+                diff_pct = (current_price - vwap_val) / vwap_val * 100
+                if current_price > vwap_val:
+                    score += 8
+                    reasons.append(f"Price ₹{current_price:.0f} is above VWAP ₹{vwap_val:.0f} (+{diff_pct:.1f}%) — intraday bullish bias")
+                else:
+                    score -= 8
+                    reasons.append(f"Price ₹{current_price:.0f} is below VWAP ₹{vwap_val:.0f} ({diff_pct:.1f}%) — intraday bearish bias")
+
+            # ── 8.  Support & Resistance (pivot points) ────────────────────────
+            pivots = self._pivot_points(high, low, close)
+            if pivots:
+                s1 = pivots.get("s1")
+                s2 = pivots.get("s2")
+                r1 = pivots.get("r1")
+                r2 = pivots.get("r2")
+                extras["support_level"]    = s1
+                extras["resistance_level"] = r1
+
+                # Check proximity (within 1.5%)
+                threshold = 0.015
+                near_support = (
+                    (s1 and abs(current_price - s1) / current_price < threshold) or
+                    (s2 and abs(current_price - s2) / current_price < threshold)
+                )
+                near_resistance = (
+                    (r1 and abs(current_price - r1) / current_price < threshold) or
+                    (r2 and abs(current_price - r2) / current_price < threshold)
+                )
+
+                if near_support:
+                    nearest = s1 if (s1 and abs(current_price - s1) < abs(current_price - (s2 or s1))) else s2
+                    score += 5
+                    reasons.append(f"Price near pivot support ₹{nearest:.0f} — potential bounce zone")
+                elif near_resistance:
+                    nearest = r1 if (r1 and abs(current_price - r1) < abs(current_price - (r2 or r1))) else r2
+                    score -= 5
+                    reasons.append(f"Price near pivot resistance ₹{nearest:.0f} — potential rejection zone")
+
         except Exception as e:
             logger.error(f"TechnicalAgent.analyze error: {e}")
 
         score = max(0.0, min(100.0, score))
-        return round(score, 1), reasons
+        return round(score, 1), reasons, extras
 
-    # ── Indicator helpers ────────────────────────────────────
+    # ── Indicator helpers ────────────────────────────────────────────────────
 
     @staticmethod
     def _rsi(series: pd.Series, period: int = 14) -> Optional[float]:
@@ -396,3 +478,60 @@ class TechnicalAgent:
                 f"({rsi_old:.0f} → {rsi_new:.0f}), potential downward reversal"
             )
         return None, None
+
+    @staticmethod
+    def _vwap(intraday_data: list) -> Optional[float]:
+        """
+        Volume Weighted Average Price from 15m intraday bars.
+        Requires bars with high, low, close, volume keys.
+        Returns the VWAP value or None if data insufficient.
+        """
+        if not intraday_data:
+            return None
+        try:
+            cum_tp_vol = 0.0
+            cum_vol    = 0.0
+            for bar in intraday_data:
+                h = bar.get("high", bar.get("price", 0))
+                l = bar.get("low",  bar.get("price", 0))
+                c = bar.get("close", bar.get("price", 0))
+                v = bar.get("volume", 0)
+                if v > 0:
+                    typical_price = (h + l + c) / 3.0
+                    cum_tp_vol += typical_price * v
+                    cum_vol    += v
+            if cum_vol > 0:
+                return round(cum_tp_vol / cum_vol, 2)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _pivot_points(high: pd.Series, low: pd.Series,
+                      close: pd.Series) -> Optional[dict]:
+        """
+        Standard pivot points from the most recent completed day.
+        Returns dict with pivot, s1, s2, r1, r2 or None if insufficient data.
+        """
+        if len(close) < 2:
+            return None
+        try:
+            prev_h = float(high.iloc[-2])
+            prev_l = float(low.iloc[-2])
+            prev_c = float(close.iloc[-2])
+
+            pivot = (prev_h + prev_l + prev_c) / 3.0
+            r1    = 2 * pivot - prev_l
+            r2    = pivot + (prev_h - prev_l)
+            s1    = 2 * pivot - prev_h
+            s2    = pivot - (prev_h - prev_l)
+
+            return {
+                "pivot": round(pivot, 2),
+                "r1":    round(r1, 2),
+                "r2":    round(r2, 2),
+                "s1":    round(s1, 2),
+                "s2":    round(s2, 2),
+            }
+        except Exception:
+            return None

@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=12"/>
+  <link rel="stylesheet" href="/css/style.css?v=13"/>
 </head>
 <body>
 
@@ -147,12 +147,27 @@
           Indian Stock Signals
           <span class="badge bg-secondary ms-2 fs-6" id="stock-count">0</span>
         </h2>
-        <!-- Filter bar -->
+        <!-- Signal filter bar -->
         <div class="filter-bar" id="filter-bar">
           <button class="btn-filter active" onclick="filterStocks('ALL', this)">All</button>
           <button class="btn-filter buy"    onclick="filterStocks('BUY', this)">🟢 Buy</button>
           <button class="btn-filter hold"   onclick="filterStocks('HOLD', this)">🟡 Hold</button>
           <button class="btn-filter sell"   onclick="filterStocks('SELL', this)">🔴 Sell</button>
+        </div>
+        <!-- Sector filter bar -->
+        <div class="filter-bar sector-filter-bar mt-2" id="sector-filter-bar">
+          <button class="btn-filter-sector active" onclick="filterSector('ALL', this)">All Sectors</button>
+          <button class="btn-filter-sector" onclick="filterSector('IT', this)">💻 IT</button>
+          <button class="btn-filter-sector" onclick="filterSector('Banking', this)">🏦 Banking</button>
+          <button class="btn-filter-sector" onclick="filterSector('Finance', this)">💳 Finance</button>
+          <button class="btn-filter-sector" onclick="filterSector('Energy', this)">⚡ Energy</button>
+          <button class="btn-filter-sector" onclick="filterSector('Pharma', this)">💊 Pharma</button>
+          <button class="btn-filter-sector" onclick="filterSector('Auto', this)">🚗 Auto</button>
+          <button class="btn-filter-sector" onclick="filterSector('FMCG', this)">🛒 FMCG</button>
+          <button class="btn-filter-sector" onclick="filterSector('Infra', this)">🏗️ Infra</button>
+          <button class="btn-filter-sector" onclick="filterSector('Metals', this)">🔩 Metals</button>
+          <button class="btn-filter-sector" onclick="filterSector('Telecom', this)">📡 Telecom</button>
+          <button class="btn-filter-sector" onclick="filterSector('Others', this)">🎯 Others</button>
         </div>
       </div>
       <div class="row g-3" id="stock-grid"></div>
@@ -454,7 +469,14 @@
 
         <!-- Price chart -->
         <div class="chart-container mb-4">
-          <h5><i class="bi bi-graph-up me-2"></i>Today's Price Movement</h5>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Price Chart</h5>
+            <div class="chart-tf-btns" id="chart-tf-btns">
+              <button class="btn-tf active" onclick="switchChartTF('15m', this)">15m</button>
+              <button class="btn-tf" onclick="switchChartTF('1h', this)">1H</button>
+              <button class="btn-tf" onclick="switchChartTF('daily', this)">Daily</button>
+            </div>
+          </div>
           <canvas id="modal-chart" height="120"></canvas>
           <p class="text-muted small mt-1" id="chart-note"></p>
         </div>
@@ -533,6 +555,6 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/app.js?v=9"></script>
+<script src="/js/app.js?v=13"></script>
 </body>
 </html>
