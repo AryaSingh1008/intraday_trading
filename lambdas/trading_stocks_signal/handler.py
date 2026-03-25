@@ -11,6 +11,7 @@ from datetime import datetime
 import dynamo_cache
 from backend.data.stock_fetcher import StockFetcher
 from backend.agents.signal_agent import SignalAgent
+from ai_validator import validate_signal
 
 INDIAN_STOCKS = {
     # ── IT (8) ────────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ INDIAN_STOCKS = {
     "BIOCON.NS":     {"name": "Biocon",                    "sector": "Pharma"},
     "LUPIN.NS":      {"name": "Lupin",                     "sector": "Pharma"},
     # ── Auto (8) ──────────────────────────────────────────────────────────────
-    "TATAMOTORS.NS": {"name": "Tata Motors",               "sector": "Auto"},
+    "PAYTM.NS":      {"name": "Paytm (One97 Comm)",        "sector": "Others"},
     "MARUTI.NS":     {"name": "Maruti Suzuki",             "sector": "Auto"},
     "BAJAJ-AUTO.NS": {"name": "Bajaj Auto",                "sector": "Auto"},
     "EICHERMOT.NS":  {"name": "Eicher Motors",             "sector": "Auto"},
@@ -102,7 +103,7 @@ INDIAN_STOCKS = {
     "PIDILITIND.NS": {"name": "Pidilite Industries",       "sector": "Others"},
     "HAL.NS":        {"name": "Hindustan Aeronautics",     "sector": "Others"},
     "IRCTC.NS":      {"name": "IRCTC",                     "sector": "Others"},
-    "ZOMATO.NS":     {"name": "Zomato",                    "sector": "Others"},
+    "NYKAA.NS":      {"name": "Nykaa (FSN E-Commerce)",    "sector": "Others"},
     "DMART.NS":      {"name": "Avenue Supermarts (DMart)",  "sector": "Others"},
 }
 
@@ -246,7 +247,7 @@ def handler(event, context):
             for s, info in INDIAN_STOCKS.items()
         ])
 
-    # GET /api/stock/{symbol} — single stock detail
+    # GET /api/stock/{symbol} — single stock detail (with AI validation)
     if path_params.get("symbol"):
         symbol = path_params["symbol"].upper()
         if not symbol.endswith(".NS"):
@@ -254,6 +255,19 @@ def handler(event, context):
         info   = INDIAN_STOCKS.get(symbol, {})
         name   = info.get("name", symbol.replace(".NS", "")) if info else symbol.replace(".NS", "")
         result = asyncio.run(_analyse_one(symbol, name))
+
+        # AI Signal Validation (cached separately, 15 min TTL)
+        ai_cache_key = f"ai_{symbol}"
+        ai_data = dynamo_cache.get_cached(ai_cache_key)
+        if not ai_data:
+            try:
+                ai_data = validate_signal(result)
+                if ai_data.get("ai_available"):
+                    dynamo_cache.set_cached(ai_cache_key, ai_data, ttl_seconds=900)
+            except Exception:
+                ai_data = {"ai_available": False}
+        result.update(ai_data)
+
         return _json(result)
 
     # GET /api/stocks — all stocks (or EventBridge warmup)

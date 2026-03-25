@@ -126,7 +126,7 @@ INDIAN_STOCKS = {
     "BIOCON.NS":     {"name": "Biocon",                    "sector": "Pharma"},
     "LUPIN.NS":      {"name": "Lupin",                     "sector": "Pharma"},
     # Auto (8)
-    "TATAMOTORS.NS": {"name": "Tata Motors",               "sector": "Auto"},
+    "PAYTM.NS":      {"name": "Paytm (One97 Comm)",        "sector": "Others"},
     "MARUTI.NS":     {"name": "Maruti Suzuki",             "sector": "Auto"},
     "BAJAJ-AUTO.NS": {"name": "Bajaj Auto",                "sector": "Auto"},
     "EICHERMOT.NS":  {"name": "Eicher Motors",             "sector": "Auto"},
@@ -171,7 +171,7 @@ INDIAN_STOCKS = {
     "PIDILITIND.NS": {"name": "Pidilite Industries",       "sector": "Others"},
     "HAL.NS":        {"name": "Hindustan Aeronautics",     "sector": "Others"},
     "IRCTC.NS":      {"name": "IRCTC",                     "sector": "Others"},
-    "ZOMATO.NS":     {"name": "Zomato",                    "sector": "Others"},
+    "NYKAA.NS":      {"name": "Nykaa (FSN E-Commerce)",    "sector": "Others"},
     "DMART.NS":      {"name": "Avenue Supermarts (DMart)",  "sector": "Others"},
 }
 

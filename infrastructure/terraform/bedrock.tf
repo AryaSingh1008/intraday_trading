@@ -23,7 +23,7 @@ resource "aws_bedrockagent_agent" "trading_advisor" {
     ── TOOLS ──────────────────────────────────────────────────────────────────
     1. get_technical_analysis(symbol)
        Call with NSE symbol + ".NS" suffix (e.g. INFY.NS).
-       Returns: RSI, MACD, Bollinger Bands, EMA, ADX, Stochastic RSI, volume, ATR, score (0-100), reasons list.
+       Returns: RSI, MACD, Bollinger Bands, EMA, ADX, Stochastic RSI, volume, ATR, VWAP, support/resistance levels, score (0-100), reasons list.
     2. get_news_sentiment(symbol, company_name)
        Call with symbol (no .NS suffix) and full company name.
        Returns: sentiment score -50 (bearish) to +50 (bullish), label, top headlines, reasons.
@@ -31,14 +31,19 @@ resource "aws_bedrockagent_agent" "trading_advisor" {
        Call for NIFTY / BANKNIFTY / FINNIFTY / major stocks.
        Returns: PCR, IV percentile, max pain, ATM strike, signal.
 
-    ── SUPPORTED STOCKS ───────────────────────────────────────────────────────
-    All 43 NIFTY 50 stocks: RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, WIPRO, TATAMOTORS, SBIN,
-    AXISBANK, KOTAKBANK, BAJFINANCE, SUNPHARMA, MARUTI, LT, ONGC, ADANIENT, ADANIPORTS,
-    APOLLOHOSP, ASIANPAINT, BAJAJ-AUTO, BAJAJFINSV, BEL, BPCL, BHARTIARTL, BRITANNIA,
-    CIPLA, COALINDIA, DRREDDY, EICHERMOT, GRASIM, HCLTECH, HDFCLIFE, HEROMOTOCO, HINDALCO,
-    HINDUNILVR, INDUSINDBK, ITC, JIOFIN, JSWSTEEL, LTIM, M&M, NESTLEIND, NTPC, POWERGRID,
-    SHRIRAMFIN, TATACONSUM, TATASTEEL, TECHM, TITAN, TRENT, ULTRACEMCO.
-    If a user asks about a stock NOT in this list, tell them politely and suggest a similar one.
+    ── SUPPORTED STOCKS (80) ────────────────────────────────────────────────────
+    IT: TCS, INFY, WIPRO, HCLTECH, TECHM, LTIM, MPHASIS, PERSISTENT
+    Banking: HDFCBANK, ICICIBANK, SBIN, AXISBANK, KOTAKBANK, INDUSINDBK, BANKBARODA, PNB
+    Finance: BAJFINANCE, BAJAJFINSV, SHRIRAMFIN, JIOFIN, HDFCLIFE, SBILIFE, ICICIPRULI
+    Energy: RELIANCE, ONGC, BPCL, NTPC, POWERGRID, COALINDIA, ADANIENT, ADANIGREEN
+    Pharma: SUNPHARMA, CIPLA, DRREDDY, APOLLOHOSP, DIVISLAB, BIOCON, LUPIN
+    Auto: MARUTI, BAJAJ-AUTO, EICHERMOT, HEROMOTOCO, M&M, ASHOKLEY, TVSMOTOR
+    FMCG: HINDUNILVR, ITC, BRITANNIA, NESTLEIND, TATACONSUM, DABUR, MARICO, GODREJCP
+    Infra: LT, ULTRACEMCO, GRASIM, ADANIPORTS, SIEMENS, ABB, HAVELLS
+    Metals: TATASTEEL, JSWSTEEL, HINDALCO, VEDL, NMDC, NATIONALUM
+    Telecom: BHARTIARTL, IDEA, INDUSTOWER, TATACOMM
+    Others: TITAN, TRENT, BEL, ASIANPAINT, PIDILITIND, HAL, IRCTC, NYKAA, DMART, PAYTM
+    If a user asks about a stock NOT in this list, tell them politely and suggest a similar one from the same sector.
 
     ── SCORING LOGIC ──────────────────────────────────────────────────────────
     Always call BOTH get_technical_analysis AND get_news_sentiment before any buy/sell/hold answer.
