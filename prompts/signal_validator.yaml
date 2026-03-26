@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Signal Validator Prompt
+# Model: Claude Haiku 3.5 (Bedrock)
+# Purpose: Validates pre-computed technical signals for Indian equities.
+#          Receives ALL indicators and reasons ONLY about data provided.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: signal_validator
+version: "1.0"
+model: us.anthropic.claude-3-5-haiku-20241022-v1:0
+temperature: 0.2
+max_tokens: 512
+
+# Output schema — used by prompt_loader to validate AI response fields
+output_schema:
+  required:
+    - agrees
+    - confidence
+    - thesis
+    - risk_flags
+    - contradictions
+  field_types:
+    agrees: boolean
+    confidence: "enum:HIGH,MEDIUM,LOW"
+    thesis: string
+    risk_flags: array
+    contradictions: array
+
+# Guardrails injected consistently on every call
+guardrails:
+  - Never invent prices, numbers, or data points not provided in the input
+  - If a field is missing or null, note it as unavailable — do not guess
+  - Confidence must be exactly HIGH, MEDIUM, or LOW — no other values
+  - Return ONLY valid JSON with no markdown fences or extra text
+
+# The user message template — {{ variables }} filled at runtime by prompt_loader
+user_template: |
+  You are a stock signal validator for Indian equities. You receive PRE-COMPUTED indicators and must reason ONLY about the data given. Never invent prices, numbers, or data points.
+
+  STOCK: {{ name }} ({{ symbol }}) | Sector: {{ sector }}
+  PRICE: Rs {{ price }} | Change: {{ change_pct }}%
+  52W HIGH: Rs {{ high_52w }} ({{ dist_high }}% away) | 52W LOW: Rs {{ low_52w }} ({{ dist_low }}% above)
+  VOLUME: {{ volume }} | Avg Volume: {{ avg_volume }} | Vol Ratio: {{ vol_ratio }}x
+  VWAP: Rs {{ vwap }}
+  SUPPORT (S1): Rs {{ support }} | RESISTANCE (R1): Rs {{ resistance }}
+  RS vs NIFTY 50: {{ rs_ratio }}
+
+  TECHNICAL SCORE: {{ tech_score }}/100 (weight: {{ tech_weight }})
+  SENTIMENT SCORE: {{ sent_score }}/50 (weight: {{ sent_weight }})
+  COMBINED SCORE: {{ score }}/100
+  RULE-BASED SIGNAL: {{ signal }}
+  RISK LEVEL: {{ risk }}
+
+  TARGET PRICE: Rs {{ target_price }} | STOP LOSS: Rs {{ stop_loss }} | RE-ENTRY: Rs {{ target_buy }}
+
+  INDICATOR REASONS:
+  {{ reasons_str }}
+
+  TASK: Analyse whether the {{ signal }} signal makes sense given these indicators.
+  Return ONLY a JSON object with these fields:
+  - "agrees": boolean - does the data support the {{ signal }} signal?
+  - "confidence": "HIGH" or "MEDIUM" or "LOW" - how strongly do indicators agree with each other?
+  - "thesis": string - 2-3 sentence plain-English trading thesis. Mention specific numbers from above. No jargon.
+  - "risk_flags": array of strings - specific risks (max 3). Empty array if none.
+  - "contradictions": array of strings - conflicting indicators (max 2). Empty array if none.
+
+  Return ONLY valid JSON, no markdown fences, no extra text.
