@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Headline Classifier Prompt
+# Model: Amazon Nova Micro (Bedrock)
+# Purpose: Classifies top news headlines for Indian stock market impact.
+#          Lightweight, fast classification — VADER is the fallback.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: headline_classifier
+version: "1.0"
+model: us.amazon.nova-micro-v1:0
+temperature: 0.1
+max_tokens: 256
+
+# Output schema — array of classification objects
+output_schema:
+  type: array
+  item_fields:
+    - title_num
+    - sentiment
+    - impact
+  field_types:
+    title_num: integer
+    sentiment: "enum:BULLISH,BEARISH,NEUTRAL"
+    impact: "enum:HIGH,MEDIUM,LOW"
+
+# Guardrails
+guardrails:
+  - Return ONLY a JSON array — no explanation, no markdown
+  - sentiment must be exactly BULLISH, BEARISH, or NEUTRAL
+  - impact must be exactly HIGH, MEDIUM, or LOW
+  - title_num must match the number in the input list
+
+# The user message template
+user_template: |
+  Classify each headline for Indian stock market impact.
+  For each headline, return: sentiment (BULLISH/BEARISH/NEUTRAL) and impact (HIGH/MEDIUM/LOW).
+
+  Headlines:
+  {{ headlines_str }}
+
+  Return ONLY a JSON array like: [{"title_num":1,"sentiment":"BULLISH","impact":"HIGH"}, ...]
+  No explanation, no markdown.

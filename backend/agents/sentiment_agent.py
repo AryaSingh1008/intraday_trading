@@ -50,30 +50,50 @@ def _ai_classify_headlines(headlines: list) -> dict:
     Send top headlines to Nova Micro for impact classification.
     Returns {title: {"sentiment": "BULLISH"/"BEARISH"/"NEUTRAL", "impact": "HIGH"/"MEDIUM"/"LOW"}}
     Falls back to empty dict on error (VADER scores used instead).
+
+    Prompt loaded from: prompts/headline_classifier.yaml
     """
     client = _get_bedrock_client()
     if not client or not headlines:
         return {}
 
     titles = [h["title"] for h in headlines[:3]]
-    titles_str = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
+    headlines_str = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
 
-    prompt = f"""Classify each headline for Indian stock market impact.
-For each headline, return: sentiment (BULLISH/BEARISH/NEUTRAL) and impact (HIGH/MEDIUM/LOW).
-
-Headlines:
-{titles_str}
-
-Return ONLY a JSON array like: [{{"title_num":1,"sentiment":"BULLISH","impact":"HIGH"}}, ...]
-No explanation, no markdown."""
+    # Load prompt from template
+    try:
+        import sys
+        import os
+        _agents_dir = os.path.dirname(os.path.abspath(__file__))
+        _backend_dir = os.path.dirname(_agents_dir)
+        if _backend_dir not in sys.path:
+            sys.path.insert(0, _backend_dir)
+        from prompt_loader import load_prompt
+        cfg = load_prompt("headline_classifier", {"headlines_str": headlines_str})
+        prompt = cfg["user"]
+        model_id = cfg["model"] or _AI_MODEL_ID
+        max_tokens = cfg["max_tokens"]
+        temperature = cfg["temperature"]
+    except Exception as e:
+        logging.getLogger(__name__).warning("prompt_loader unavailable, using inline prompt: %s", e)
+        prompt = (
+            f"Classify each headline for Indian stock market impact.\n"
+            f"For each headline, return: sentiment (BULLISH/BEARISH/NEUTRAL) and impact (HIGH/MEDIUM/LOW).\n\n"
+            f"Headlines:\n{headlines_str}\n\n"
+            f'Return ONLY a JSON array like: [{{"title_num":1,"sentiment":"BULLISH","impact":"HIGH"}}, ...]\n'
+            f"No explanation, no markdown."
+        )
+        model_id = _AI_MODEL_ID
+        max_tokens = 256
+        temperature = 0.1
 
     try:
         response = client.invoke_model(
-            modelId=_AI_MODEL_ID,
+            modelId=model_id,
             contentType="application/json",
             accept="application/json",
             body=json.dumps({
-                "inferenceConfig": {"maxTokens": 256, "temperature": 0.1},
+                "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
                 "messages": [{"role": "user", "content": [{"text": prompt}]}],
             }),
         )

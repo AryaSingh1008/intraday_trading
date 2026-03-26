@@ -237,11 +237,14 @@ async function loadStocks(forceRefresh) {
 
   try {
     // Phase 1: Fetch first page quickly
+    loadedPages = {};
     const r = await fetch("/api/stocks?page=1&per_page=" + STOCKS_PER_PAGE);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
 
     allStocks = data.stocks || [];
+    totalStocksCount = data.total || allStocks.length;
+    loadedPages[1] = true;
 
     const lu = document.getElementById("last-updated-text");
     if (lu) lu.textContent = "Updated: " + (data.last_updated || "");
@@ -268,26 +271,39 @@ async function loadStocks(forceRefresh) {
   }
 }
 
+let totalStocksCount = 0;   // total stocks on the server
+let loadedPages      = {};  // track which pages have been fetched
+
 async function _loadRemainingStocks() {
-  try {
-    const r = await fetch("/api/stocks");
-    if (!r.ok) return;
-    const data = await r.json();
+  // Load pages 2, 3, 4 sequentially in background instead of fetching all at once
+  if (!totalStocksCount) return;
+  const totalPages = Math.ceil(totalStocksCount / STOCKS_PER_PAGE);
 
-    allStocks = data.stocks || [];
-    backgroundLoadDone = true;
+  for (let pg = 2; pg <= totalPages; pg++) {
+    if (loadedPages[pg]) continue;
+    try {
+      const r = await fetch("/api/stocks?page=" + pg + "&per_page=" + STOCKS_PER_PAGE);
+      if (!r.ok) continue;
+      const data = await r.json();
+      const newStocks = data.stocks || [];
 
-    const lu = document.getElementById("last-updated-text");
-    if (lu && data.last_updated) lu.textContent = "Updated: " + data.last_updated;
+      // Append new stocks (avoid duplicates)
+      const existingSymbols = new Set(allStocks.map(s => s.symbol));
+      newStocks.forEach(s => { if (!existingSymbols.has(s.symbol)) allStocks.push(s); });
+      loadedPages[pg] = true;
 
-    renderSummaryCards();
-    renderStocks();
-    _syncAllHearts();
-  } catch (e) {
-    console.error("Background stock load failed:", e);
-    backgroundLoadDone = true;
-    renderStocks(); // re-render to remove "loading more" message
+      renderSummaryCards();
+      // Only re-render if user is on a page that now has data
+      if (currentPage === pg) renderStocks();
+    } catch (e) {
+      console.error("Background page " + pg + " load failed:", e);
+    }
   }
+
+  backgroundLoadDone = true;
+  renderSummaryCards();
+  renderStocks();
+  _syncAllHearts();
 }
 
 function renderSummaryCards() {
@@ -351,8 +367,11 @@ function renderStocks() {
     return;
   }
 
-  // Paginate
-  const totalPages = Math.ceil(filtered.length / STOCKS_PER_PAGE);
+  // Paginate — use server total if no filters active, otherwise use filtered count
+  const useServerTotal = (activeFilter === "ALL" && activeSector === "ALL" && totalStocksCount > 0);
+  const totalPages = useServerTotal
+    ? Math.ceil(totalStocksCount / STOCKS_PER_PAGE)
+    : Math.ceil(filtered.length / STOCKS_PER_PAGE);
   if (currentPage > totalPages) currentPage = totalPages;
   if (currentPage < 1) currentPage = 1;
   const start = (currentPage - 1) * STOCKS_PER_PAGE;
@@ -415,10 +434,31 @@ function renderPagination(totalPages) {
   container.innerHTML = html;
 }
 
-function goToPage(page) {
+async function goToPage(page) {
   currentPage = page;
+
+  // If this page hasn't been fetched yet, fetch it on demand
+  if (!loadedPages[page]) {
+    const grid = document.getElementById("stock-grid");
+    if (grid) grid.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="text-muted mt-2">Loading page ' + page + '...</div></div>';
+
+    try {
+      const r = await fetch("/api/stocks?page=" + page + "&per_page=" + STOCKS_PER_PAGE);
+      if (r.ok) {
+        const data = await r.json();
+        const newStocks = data.stocks || [];
+        const existingSymbols = new Set(allStocks.map(s => s.symbol));
+        newStocks.forEach(s => { if (!existingSymbols.has(s.symbol)) allStocks.push(s); });
+        loadedPages[page] = true;
+        renderSummaryCards();
+      }
+    } catch (e) {
+      console.error("Failed to fetch page " + page + ":", e);
+    }
+  }
+
   renderStocks();
-  // Scroll to top of stock grid
+  _syncAllHearts();
   var grid = document.getElementById("stocks-section");
   if (grid) grid.scrollIntoView({ behavior: "smooth", block: "start" });
 }

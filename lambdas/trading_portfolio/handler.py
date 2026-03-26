@@ -127,18 +127,40 @@ def handler(event, context):
 
 
 def _fetch_prices(symbols: set) -> dict:
-    """Fetch current price and previous close for a set of symbols via yfinance."""
-    result = {}
+    """Fetch current price and previous close for a set of symbols via yfinance.
+    Uses batch download with a timeout to prevent Lambda from hanging."""
+    result = {sym: {"current": 0.0, "prev_close": 0.0} for sym in symbols}
+    if not symbols:
+        return result
     try:
         import yfinance as yf
+        # Batch download all symbols at once (much faster than one-by-one)
+        data = yf.download(
+            list(symbols),
+            period="2d",
+            group_by="ticker",
+            threads=True,
+            timeout=10,       # 10-second timeout per request
+            progress=False,
+        )
+        if data.empty:
+            return result
+
         for sym in symbols:
             try:
-                fi = yf.Ticker(sym).fast_info
-                cur  = float(fi.get("last_price")      or 0)
-                prev = float(fi.get("previous_close")   or 0)
-                result[sym] = {"current": cur, "prev_close": prev}
+                if len(symbols) == 1:
+                    sym_data = data
+                else:
+                    sym_data = data[sym] if sym in data.columns.get_level_values(0) else None
+                if sym_data is None or sym_data.empty:
+                    continue
+                closes = sym_data["Close"].dropna()
+                if len(closes) >= 2:
+                    result[sym] = {"current": float(closes.iloc[-1]), "prev_close": float(closes.iloc[-2])}
+                elif len(closes) == 1:
+                    result[sym] = {"current": float(closes.iloc[-1]), "prev_close": float(closes.iloc[-1])}
             except Exception:
-                result[sym] = {"current": 0.0, "prev_close": 0.0}
+                pass
     except Exception:
         pass
     return result
