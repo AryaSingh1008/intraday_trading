@@ -4,7 +4,6 @@
 
 A fully serverless cloud platform combining technical analysis, news sentiment, and AI-powered recommendations. Deployed on AWS with 100% uptime, zero infrastructure overhead, and pay-as-you-go pricing (~$2–8/month).
 
-🔗 **Live Demo:** [https://dax4jpe1e1lnf.cloudfront.net](https://dax4jpe1e1lnf.cloudfront.net)
 
 ---
 
