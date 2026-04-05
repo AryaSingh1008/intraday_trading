@@ -16,11 +16,13 @@ output "cloudfront_distribution_id" {
 output "frontend_bucket" {
   description = "S3 bucket for frontend files"
   value       = aws_s3_bucket.frontend.bucket
+  sensitive   = true
 }
 
 output "exports_bucket" {
   description = "S3 bucket for temporary Excel exports"
   value       = aws_s3_bucket.exports.bucket
+  sensitive   = true
 }
 
 output "dynamodb_cache_table" {
