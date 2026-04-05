@@ -5,9 +5,9 @@ variable "aws_region" {
 }
 
 variable "aws_account_id" {
-  description = "AWS account ID"
+  description = "AWS account ID — pass via TF_VAR_aws_account_id, never hardcode"
   type        = string
-  default     = "REDACTED"
+  sensitive   = true
 }
 
 variable "project_name" {
@@ -25,8 +25,8 @@ variable "environment" {
 variable "bedrock_model_id" {
   description = "Bedrock foundation model for the agent"
   type        = string
-  # Use cross-region inference profile for Claude 3.5 Haiku — no use-case form required
-  default     = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+  # Claude Haiku 4.5 — active model, cross-region inference profile
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 
 variable "lambda_layers_built" {
