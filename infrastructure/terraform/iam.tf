@@ -189,13 +189,11 @@ data "aws_iam_policy_document" "bedrock_agent_permissions" {
     effect  = "Allow"
     actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
     resources = [
-      # Amazon Nova Lite cross-region inference profile (primary model — no use-case form)
+      # Amazon Nova Lite cross-region inference profile
       "arn:aws:bedrock:*:*:inference-profile/us.amazon.nova-lite-v1:0",
       "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
-      # Claude Haiku (fallback / future — once Anthropic use-case form is submitted)
-      "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-haiku-20240307-v1:0",
-      "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0",
-      "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-3-5-haiku-20241022-v1:0",
+      # Claude Haiku 4.5 cross-region inference profile
+      "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
     ]
   }
   statement {
