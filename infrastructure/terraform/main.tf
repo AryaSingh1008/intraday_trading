@@ -16,12 +16,8 @@ terraform {
     }
   }
 
-  # Uncomment after creating the S3 backend bucket (optional — use local state for now)
-  # backend "s3" {
-  #   bucket = "trading-terraform-state-REDACTED"
-  #   key    = "trading-assistant/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+  # Backend config is passed via -backend-config flags in CI/CD (no secrets in code)
+  backend "s3" {}
 }
 
 provider "aws" {
