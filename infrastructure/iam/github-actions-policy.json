@@ -39,6 +39,7 @@
         "s3:GetBucketWebsite",
         "s3:GetBucketObjectLockConfiguration",
         "s3:GetAccelerateConfiguration",
+        "s3:GetBucketLogging",
         "s3:GetBucketTagging",
         "s3:PutBucketTagging",
         "s3:GetLifecycleConfiguration",
@@ -142,12 +143,17 @@
       ]
     },
     {
+      "Sid": "CloudWatchLogsDescribe",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
+    },
+    {
       "Sid": "CloudWatchLogsManage",
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogGroup",
         "logs:DeleteLogGroup",
-        "logs:DescribeLogGroups",
         "logs:PutRetentionPolicy",
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
