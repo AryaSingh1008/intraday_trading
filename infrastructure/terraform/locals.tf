@@ -44,5 +44,6 @@ locals {
     AWS_ACCOUNT_ID_VALUE  = local.account_id
     PROJECT_REGION        = local.region
     PORTFOLIO_TABLE_NAME  = local.portfolio_table_name
+    PROMPTS_DIR           = "/opt/python/prompts"
   }
 }

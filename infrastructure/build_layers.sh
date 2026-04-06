@@ -139,8 +139,15 @@ mkdir -p "$BACKEND_LAYER_DIR"
 # Copy the entire backend/ package
 cp -r "$SCRIPT_DIR/../backend" "$BACKEND_LAYER_DIR/backend"
 
-# Copy shared helper (dynamo_cache.py) as top-level module
+# Copy shared helpers as top-level modules
 cp "$SCRIPT_DIR/../lambdas/shared/dynamo_cache.py" "$BACKEND_LAYER_DIR/dynamo_cache.py"
+cp "$SCRIPT_DIR/../lambdas/shared/prompt_loader.py" "$BACKEND_LAYER_DIR/prompt_loader.py"
+
+# Copy prompts/ so prompt_loader can find its YAML templates at /opt/python/prompts
+cp -r "$SCRIPT_DIR/../prompts" "$BACKEND_LAYER_DIR/prompts"
+
+# Install jinja2 (PyYAML is preinstalled in the Lambda python3.12 runtime, jinja2 is not)
+pip install --upgrade --target "$BACKEND_LAYER_DIR" jinja2
 
 # Remove local-dev cache dirs / pyc files to keep zip small
 find "$BACKEND_LAYER_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
