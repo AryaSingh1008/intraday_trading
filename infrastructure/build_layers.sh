@@ -146,8 +146,8 @@ cp "$SCRIPT_DIR/../lambdas/shared/prompt_loader.py" "$BACKEND_LAYER_DIR/prompt_l
 # Copy prompts/ so prompt_loader can find its YAML templates at /opt/python/prompts
 cp -r "$SCRIPT_DIR/../prompts" "$BACKEND_LAYER_DIR/prompts"
 
-# Install jinja2 (PyYAML is preinstalled in the Lambda python3.12 runtime, jinja2 is not)
-pip install --upgrade --target "$BACKEND_LAYER_DIR" jinja2
+# Install jinja2 and PyYAML — neither is preinstalled in the Lambda python3.12 runtime
+pip install --upgrade --target "$BACKEND_LAYER_DIR" jinja2 pyyaml
 
 # Remove local-dev cache dirs / pyc files to keep zip small
 find "$BACKEND_LAYER_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
