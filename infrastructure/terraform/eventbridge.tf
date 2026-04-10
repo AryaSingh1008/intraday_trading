@@ -9,64 +9,15 @@ resource "aws_scheduler_schedule_group" "trading" {
   name = "${local.prefix}-schedules"
 }
 
-# ── Rule 1: Options cache refresh every 2.5 minutes ────────────────────────
-# Runs always (not just market hours) to keep cache warm for pre/post market
-resource "aws_scheduler_schedule" "options_refresh" {
-  name       = "${local.prefix}-options-refresh"
-  group_name = aws_scheduler_schedule_group.trading.name
+# ── Rule 1: Options cache refresh — DISABLED (caching removed) ─────────────
+# Cache pre-warming is no longer needed — all analysis uses live data.
+# Kept commented out for reference.
+# resource "aws_scheduler_schedule" "options_refresh" { ... }
 
-  flexible_time_window {
-    mode = "OFF"   # Exact timing — no flexibility window
-  }
-
-  schedule_expression          = "rate(2 minutes)"   # Closest supported to 150s
-  schedule_expression_timezone = "Asia/Kolkata"
-
-  target {
-    arn      = aws_lambda_function.options_refresh.arn
-    role_arn = aws_iam_role.scheduler_exec.arn
-
-    input = jsonencode({
-      source = "eventbridge"
-      type   = "options_refresh"
-    })
-
-    retry_policy {
-      maximum_retry_attempts = 0   # Don't retry stale option chain data
-      maximum_event_age_in_seconds = 60
-    }
-  }
-}
-
-# ── Rule 2: Stock signal pre-warming every 5 minutes (market hours only) ───
-resource "aws_scheduler_schedule" "stocks_refresh" {
-  name       = "${local.prefix}-stocks-refresh"
-  group_name = aws_scheduler_schedule_group.trading.name
-
-  flexible_time_window {
-    mode = "OFF"
-  }
-
-  # Every 5 minutes, Monday–Friday, 9:00 AM – 3:45 PM IST (gives buffer)
-  schedule_expression          = "rate(5 minutes)"
-  schedule_expression_timezone = "Asia/Kolkata"
-
-  target {
-    arn      = aws_lambda_function.stocks_signal.arn
-    role_arn = aws_iam_role.scheduler_exec.arn
-
-    input = jsonencode({
-      source  = "eventbridge"
-      type    = "stocks_refresh"
-      warmup  = true
-    })
-
-    retry_policy {
-      maximum_retry_attempts       = 0
-      maximum_event_age_in_seconds = 60
-    }
-  }
-}
+# ── Rule 2: Stock signal pre-warming — DISABLED (caching removed) ──────────
+# Cache pre-warming is no longer needed — all analysis uses live data.
+# Kept commented out for reference.
+# resource "aws_scheduler_schedule" "stocks_refresh" { ... }
 
 # ── Rule 3: Daily IV history append — after market close ───────────────────
 # Runs at 15:40 IST (10:10 UTC) on trading days to record the day's ATM IV

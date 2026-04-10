@@ -1031,7 +1031,7 @@ async function loadNews() {
 // ═══════════════════════════════════════════════════════════════ COUNTDOWN ════
 
 function startCountdown() {
-  countdownSecs = 900;
+  countdownSecs = 300;
   const txt = document.getElementById("countdown");
   const bar = document.getElementById("refresh-progress");
 
@@ -1040,10 +1040,10 @@ function startCountdown() {
   countdownTimer = setInterval(function() {
     countdownSecs--;
     if (txt) txt.textContent = countdownSecs;
-    if (bar) bar.style.width = ((900 - countdownSecs) / 900 * 100) + "%";
+    if (bar) bar.style.width = ((300 - countdownSecs) / 300 * 100) + "%";
 
     if (countdownSecs <= 0) {
-      countdownSecs = 900;
+      countdownSecs = 300;
       loadStocks(true);
       loadNews();
     }

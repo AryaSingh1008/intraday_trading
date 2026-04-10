@@ -1,7 +1,7 @@
 """
-Lambda handler: EventBridge rate(2m30s) trigger
-Pre-warms the options cache for WARM_SYMBOLS and appends IV history.
-Replaces the Playwright background loop (which can't run on Lambda).
+Lambda handler: EventBridge trigger
+Appends daily IV history for percentile calculation.
+Cache pre-warming removed — all analysis uses live data now.
 """
 import json
 import os
@@ -9,7 +9,6 @@ import asyncio
 import logging
 from datetime import datetime
 
-import dynamo_cache
 from backend.data.options_fetcher import OptionsFetcher
 from backend.agents.options_agent import OptionsAgent
 from backend.utils import iv_history_store
@@ -30,22 +29,18 @@ def _init():
         _agent = OptionsAgent()
 
 
-async def _refresh_one(symbol: str, append_iv: bool = False) -> dict:
-    """Fetch fresh options data, update DynamoDB cache, optionally record IV."""
+async def _append_iv_one(symbol: str) -> dict:
+    """Fetch options data and record IV for percentile calculation."""
     try:
         raw = await _fetcher.get_option_chain(symbol)
         if not raw:
             return {"symbol": symbol, "status": "no_data"}
 
-        result  = _agent.analyze(raw)
-        cache_key = f"options_{symbol}"
-        dynamo_cache.set_cached(cache_key, result, ttl_seconds=150)
+        result = _agent.analyze(raw)
 
-        # Append daily IV for percentile calculation
-        if append_iv:
-            iv_val = result.get("avg_iv") or result.get("atm_iv")
-            if iv_val:
-                iv_history_store.append_iv(symbol, iv_val)
+        iv_val = result.get("avg_iv") or result.get("atm_iv")
+        if iv_val:
+            iv_history_store.append_iv(symbol, iv_val)
 
         return {"symbol": symbol, "status": "ok", "signal": result.get("signal")}
     except Exception as exc:
@@ -53,24 +48,32 @@ async def _refresh_one(symbol: str, append_iv: bool = False) -> dict:
         return {"symbol": symbol, "status": "error", "error": str(exc)}
 
 
-async def _refresh_all(append_iv: bool = False) -> list:
-    tasks = [_refresh_one(sym, append_iv=append_iv) for sym in WARM_SYMBOLS]
+async def _append_iv_all() -> list:
+    tasks = [_append_iv_one(sym) for sym in WARM_SYMBOLS]
     return await asyncio.gather(*tasks)
 
 
 def handler(event, context):
     _init()
 
-    # EventBridge daily close rule sends {"append_iv": true}
     append_iv = bool(event.get("append_iv", False))
 
-    results = asyncio.run(_refresh_all(append_iv=append_iv))
+    if not append_iv:
+        # No cache to warm — only IV history append is useful now
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Caching disabled — no warmup needed. Use append_iv=true for IV history.",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }),
+        }
+
+    results = asyncio.run(_append_iv_all())
 
     ok_count  = sum(1 for r in results if r.get("status") == "ok")
     err_count = len(results) - ok_count
 
-    logger.info(f"options_refresh: refreshed {ok_count}/{len(results)} symbols, "
-                f"append_iv={append_iv}")
+    logger.info(f"options_refresh: IV appended for {ok_count}/{len(results)} symbols")
 
     return {
         "statusCode": 200,

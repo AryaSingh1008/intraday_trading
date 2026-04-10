@@ -9,7 +9,6 @@ import os
 import asyncio
 import logging
 
-import dynamo_cache
 from backend.data.stock_fetcher import StockFetcher
 from backend.agents.technical_agent import TechnicalAgent
 
@@ -48,11 +47,6 @@ def _parse_parameters(event: dict) -> dict:
 async def _analyse(symbol: str) -> dict:
     if not symbol.endswith(".NS"):
         symbol = symbol + ".NS"
-
-    cache_key = f"tech_{symbol}"
-    cached    = dynamo_cache.get_cached(cache_key)
-    if cached:
-        return cached
 
     stock_data = await _fetcher.get_stock_data(symbol)
     if not stock_data:
@@ -108,7 +102,6 @@ async def _analyse(symbol: str) -> dict:
         "data_source":       "yfinance",
     }
 
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=900)
     return result
 
 

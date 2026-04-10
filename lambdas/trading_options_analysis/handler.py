@@ -1,20 +1,16 @@
 """
 Lambda handler: GET /api/options?symbol=NIFTY
-Wraps OptionsFetcher (curl_cffi path) + OptionsAgent with DynamoDB caching.
+Wraps OptionsFetcher (curl_cffi path) + OptionsAgent — always uses live data.
 """
 import json
 import os
 import asyncio
 
-import dynamo_cache
 from backend.data.options_fetcher import OptionsFetcher
 from backend.agents.options_agent import OptionsAgent
 
 _fetcher = None
 _agent   = None
-
-# Warm symbols pre-loaded by EventBridge every 2.5 minutes
-WARM_SYMBOLS = ["NIFTY", "BANKNIFTY", "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"]
 
 
 def _init():
@@ -26,18 +22,11 @@ def _init():
 
 
 async def _analyse(symbol: str) -> dict:
-    cache_key = f"options_{symbol}"
-    cached    = dynamo_cache.get_cached(cache_key)
-    if cached:
-        return cached
-
     raw = await _fetcher.get_option_chain(symbol)
     if not raw:
         return {"symbol": symbol, "error": "No options data available"}
 
-    result = _agent.analyze(raw)
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=150)   # 2.5 min — matched to refresh rate
-    return result
+    return _agent.analyze(raw)
 
 
 def handler(event, context):

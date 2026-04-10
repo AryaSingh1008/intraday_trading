@@ -12,7 +12,8 @@ from datetime import datetime
 
 import boto3
 
-import dynamo_cache
+from backend.data.stock_fetcher import StockFetcher
+from backend.agents.signal_agent import SignalAgent
 from backend.utils.excel_exporter import ExcelExporter
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,8 @@ URL_EXPIRY_SEC = 3600   # 1 hour pre-signed URL
 
 _exporter = None
 _s3       = None
+_fetcher  = None
+_agent    = None
 
 INDIAN_STOCKS = {
     "RELIANCE.NS": "Reliance Industries", "TCS.NS": "Tata Consultancy Services",
@@ -34,29 +37,41 @@ INDIAN_STOCKS = {
 
 
 def _init():
-    global _exporter, _s3
+    global _exporter, _s3, _fetcher, _agent
     if _exporter is None:
         _exporter = ExcelExporter()
     if _s3 is None:
         _s3 = boto3.client("s3")
+    if _fetcher is None:
+        _fetcher = StockFetcher()
+    if _agent is None:
+        _agent = SignalAgent()
 
 
-def _get_cached_stocks() -> list:
-    """Read all stock data from DynamoDB cache."""
-    stocks = []
-    for symbol in INDIAN_STOCKS:
-        cached = dynamo_cache.get_cached(symbol)
-        if cached:
-            stocks.append(cached)
-    return stocks
+async def _fetch_live_stocks() -> list:
+    """Fetch and analyse all stocks with live data."""
+    symbols = list(INDIAN_STOCKS.keys())
+    batch_data = await _fetcher.get_batch_stock_data(symbols)
+
+    tasks = []
+    errors = []
+    for symbol, name in INDIAN_STOCKS.items():
+        stock_data = batch_data.get(symbol)
+        if not stock_data:
+            errors.append({"symbol": symbol, "name": name, "error": "No data available"})
+            continue
+        tasks.append(_agent.analyze(symbol, name, stock_data))
+
+    results = list(await asyncio.gather(*tasks))
+    return results + errors
 
 
 def handler(event, context):
     _init()
 
-    stocks = _get_cached_stocks()
+    stocks = asyncio.run(_fetch_live_stocks())
     if not stocks:
-        return _json({"error": "No cached stock data. Please load the dashboard first."}, 503)
+        return _json({"error": "Could not fetch live stock data."}, 503)
 
     try:
         # Generate Excel in a Lambda-writable temp directory

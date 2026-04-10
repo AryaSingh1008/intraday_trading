@@ -8,7 +8,6 @@ import json
 import asyncio
 import logging
 
-import dynamo_cache
 from backend.agents.sentiment_agent import SentimentAgent
 
 logger = logging.getLogger(__name__)
@@ -47,16 +46,10 @@ def _score_to_label(score: float) -> str:
 
 
 async def _analyse(symbol: str, company_name: str) -> dict:
-    cache_key = f"news_{symbol}"
-    cached    = dynamo_cache.get_cached(cache_key)
-    if cached:
-        return cached
-
-    # get_sentiment_score returns (score: float, reasons: List[str])
     score, reasons = await _agent.get_sentiment_score(symbol, company_name)
     headlines = await _agent.get_news(symbol)
 
-    result = {
+    return {
         "symbol":          symbol,
         "company_name":    company_name,
         "sentiment_score": round(float(score), 1) if score is not None else 0,
@@ -64,9 +57,6 @@ async def _analyse(symbol: str, company_name: str) -> dict:
         "top_headlines":   [h.get("title", "") for h in headlines[:5]],
         "reasons":         reasons[:5] if reasons else [],
     }
-
-    dynamo_cache.set_cached(cache_key, result, ttl_seconds=900)
-    return result
 
 
 def handler(event, context):
