@@ -1307,3 +1307,216 @@ body {
 }
 .btn-tf:hover  { background: #e9ecef; border-color: #1a237e; color: #1a237e; }
 .btn-tf.active { background: #1a237e; border-color: #1a237e; color: #fff; }
+
+/* ══════════════════════════════════════════════ INDEX STRIP ════ */
+.index-strip {
+  background: #0d1b6e;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 6px 20px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.index-strip-inner {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: max-content;
+}
+.index-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+}
+.index-divider { color: rgba(255,255,255,0.2); font-size: 1rem; }
+.idx-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.idx-price {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.idx-chg {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.idx-up   { color: #4caf50; }
+.idx-down { color: #f44336; }
+.idx-status {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+}
+.idx-open   { background: #28a745; color: #fff; }
+.idx-closed { background: #6c757d; color: #fff; }
+
+/* ═══════════════════════════════════════════════ R:R BADGE ════ */
+.rr-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.rr-good { background: #d4edda; color: #155724; border: 1px solid #28a745; }
+.rr-ok   { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+.rr-poor { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+
+/* ═══════════════════════════════════════════ SIGNAL TIMESTAMP ════ */
+.signal-ts {
+  display: block;
+  font-size: 0.72rem;
+  color: #888;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+
+/* ═══════════════════════════════════════════════ GAP SCANNER ════ */
+.gap-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 12px;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform .2s, box-shadow .2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.gap-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+.gap-card.gap-up   { border-color: #28a745; }
+.gap-card.gap-down { border-color: #dc3545; }
+.gap-icon  { font-size: 1.4rem; }
+.gap-symbol { font-size: 0.95rem; font-weight: 800; color: #212529; margin-top: 4px; }
+.gap-name   { font-size: 0.7rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gap-chg    { font-size: 1.1rem; font-weight: 800; margin-top: 4px; }
+.gap-price  { font-size: 0.8rem; color: #495057; }
+.gap-card.gap-up   .gap-chg { color: #155724; }
+.gap-card.gap-down .gap-chg { color: #721c24; }
+
+/* ════════════════════════════════════ SIGNAL STATS (Feature 10) ════ */
+.signal-stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 14px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  border-top: 4px solid #dee2e6;
+}
+.signal-stat-card.stat-sbuy  { border-color: #1e7e34; }
+.signal-stat-card.stat-buy   { border-color: #28a745; }
+.signal-stat-card.stat-hold  { border-color: #ffc107; }
+.signal-stat-card.stat-sell  { border-color: #dc3545; }
+.signal-stat-card.stat-ssell { border-color: #a71d2a; }
+.signal-stat-card.stat-top5  { border-color: #1a237e; text-align: left; }
+.ss-emoji  { font-size: 1.5rem; }
+.ss-sig    { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 4px 0 2px; }
+.ss-count  { font-size: 2rem; font-weight: 800; color: #212529; line-height: 1; }
+.ss-meta   { font-size: 0.7rem; color: #888; margin-top: 4px; }
+.ss-bar-track { background: #e9ecef; border-radius: 4px; height: 5px; margin-top: 8px; }
+.ss-bar-fill  { height: 5px; border-radius: 4px; background: #1a237e; }
+.top-pick-chip {
+  display: inline-block;
+  background: #e8f4fd;
+  border: 1.5px solid #90caf9;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  color: #1565c0;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.top-pick-chip:hover { background: #1a237e; color: #fff; border-color: #1a237e; }
+
+/* ═══════════════════════════════════════════════ OPTIONS TAB ════ */
+.options-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  border: 1.5px solid #e9ecef;
+  height: 100%;
+}
+.options-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a237e;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e9ecef;
+}
+.opt-metric-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  border: 1.5px solid #e9ecef;
+}
+.opt-metric-val { font-size: 1.4rem; font-weight: 800; color: #212529; }
+.opt-metric-lbl { font-size: 0.75rem; color: #6c757d; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+.opt-big-num    { font-size: 2rem; font-weight: 800; color: #212529; }
+.opt-desc       { font-size: 0.88rem; color: #555; margin-top: 6px; }
+.opt-bullish    { color: #155724; }
+.opt-bearish    { color: #721c24; }
+.opt-neutral    { color: #856404; }
+.opt-sentiment-badge {
+  display: inline-block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 6px 20px;
+  border-radius: 20px;
+}
+.opt-sentiment-badge.opt-bullish { background: #d4edda; border: 2px solid #28a745; }
+.opt-sentiment-badge.opt-bearish { background: #f8d7da; border: 2px solid #dc3545; }
+.opt-sentiment-badge.opt-neutral { background: #fff3cd; border: 2px solid #ffc107; }
+.opt-oi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.opt-oi-table th {
+  background: #f0f4f8;
+  padding: 7px 10px;
+  font-weight: 700;
+  color: #495057;
+  text-align: right;
+  border-bottom: 2px solid #dee2e6;
+}
+.opt-oi-table th:first-child { text-align: left; }
+.opt-oi-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #f0f4f8;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.opt-oi-table td:first-child { text-align: left; }
+.opt-oi-table tr:hover td { background: #f8f9fa; }
+
+/* ══════════════════════════════════════ MOBILE RESPONSIVENESS ════ */
+@media (max-width: 768px) {
+  .index-item { padding: 0 10px; }
+  .idx-price  { font-size: 0.82rem; }
+  .gap-card   { padding: 10px 8px; }
+  .ss-count   { font-size: 1.5rem; }
+  .header-center-line { display: none; }
+  .opt-big-num { font-size: 1.5rem; }
+}
+@media (max-width: 576px) {
+  .index-strip { padding: 5px 10px; }
+  .idx-label   { display: none; }
+  .signal-stat-card { padding: 12px 10px; }
+  .options-card { padding: 14px 12px; }
+  .rr-badge { font-size: 0.65rem; padding: 1px 6px; }
+}

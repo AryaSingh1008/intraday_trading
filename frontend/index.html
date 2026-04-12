@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=15"/>
+  <link rel="stylesheet" href="/css/style.css?v=16"/>
 </head>
 <body>
 
@@ -165,6 +165,34 @@
   Not financial advice. Use signals as a guide, not a guarantee.
 </div>
 
+<!-- ══════════════════════════════════════════════ INDEX STRIP ══ -->
+<div class="index-strip" id="index-strip">
+  <div class="index-strip-inner" id="index-strip-inner">
+    <span class="index-item" id="idx-nifty">
+      <span class="idx-label">NIFTY 50</span>
+      <span class="idx-price" id="idx-nifty-price">—</span>
+      <span class="idx-chg" id="idx-nifty-chg">—</span>
+    </span>
+    <span class="index-divider">|</span>
+    <span class="index-item" id="idx-bank">
+      <span class="idx-label">BANKNIFTY</span>
+      <span class="idx-price" id="idx-bank-price">—</span>
+      <span class="idx-chg" id="idx-bank-chg">—</span>
+    </span>
+    <span class="index-divider">|</span>
+    <span class="index-item" id="idx-vix">
+      <span class="idx-label">India VIX</span>
+      <span class="idx-price" id="idx-vix-price">—</span>
+      <span class="idx-chg" id="idx-vix-chg">—</span>
+    </span>
+    <span class="index-divider">|</span>
+    <span class="index-item">
+      <span class="idx-label" id="market-status-label">Market</span>
+      <span class="idx-status" id="market-open-badge">—</span>
+    </span>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════ AUTO-REFRESH BAR ══ -->
 <div class="refresh-bar" id="refresh-bar">
   <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">900</strong>s</span>
@@ -190,6 +218,10 @@
       </button>
       <button class="main-tab-btn" id="tab-btn-portfolio" onclick="switchTab('portfolio')">
         <i class="bi bi-briefcase-fill"></i> My Portfolio
+      </button>
+      <button class="main-tab-btn" id="tab-btn-options" onclick="switchTab('options')">
+        <i class="bi bi-graph-up-arrow"></i> Options
+        <span class="badge badge-new ms-1">LIVE</span>
       </button>
     </div>
   </div>
@@ -281,6 +313,24 @@
       <div class="row g-3" id="stock-grid"></div>
       <!-- Pagination -->
       <div class="mt-4" id="pagination-controls"></div>
+    </div>
+
+    <!-- Gap Scanner -->
+    <div id="gap-scanner-section" class="d-none mt-4">
+      <div class="section-header mb-3">
+        <h2 class="section-title"><i class="bi bi-lightning-charge-fill me-2 text-warning"></i>Gap Scanner</h2>
+        <small class="text-muted">Stocks with biggest move from previous close</small>
+      </div>
+      <div class="row g-2" id="gap-scanner-grid"></div>
+    </div>
+
+    <!-- Signal Stats (Feature 10) -->
+    <div id="signal-stats-section" class="d-none mt-4">
+      <div class="section-header mb-3">
+        <h2 class="section-title"><i class="bi bi-bar-chart-steps me-2"></i>Signal Summary</h2>
+        <small class="text-muted" id="signal-stats-timestamp"></small>
+      </div>
+      <div class="row g-3" id="signal-stats-grid"></div>
     </div>
 
     <!-- News section -->
@@ -545,6 +595,84 @@
 
   </div><!-- /tab-portfolio -->
 
+  <!-- ════════════════════════ TAB: OPTIONS ════════════════════════ -->
+  <div id="tab-options" class="tab-panel d-none">
+
+    <div class="section-header mb-3 d-flex justify-content-between align-items-center">
+      <h2 class="section-title">
+        <i class="bi bi-graph-up-arrow me-2 text-primary"></i>Options Analysis
+      </h2>
+      <div class="d-flex gap-2 align-items-center">
+        <select class="form-select form-select-sm" id="options-symbol-select" style="width:auto" onchange="loadOptions()">
+          <option value="NIFTY">NIFTY 50</option>
+          <option value="BANKNIFTY">BANKNIFTY</option>
+        </select>
+        <button class="btn-action btn-refresh" onclick="loadOptions()">
+          <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="options-loading" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
+      <p class="mt-3 text-muted">Fetching live options chain…</p>
+    </div>
+
+    <!-- Error -->
+    <div id="options-error" class="d-none alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      Could not load options data. Markets may be closed or data unavailable.
+    </div>
+
+    <!-- Options summary cards -->
+    <div id="options-content" class="d-none">
+
+      <!-- Key metrics row -->
+      <div class="row g-3 mb-4" id="options-metrics"></div>
+
+      <!-- PCR + Max Pain row -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="options-card">
+            <div class="options-card-title"><i class="bi bi-bar-chart-fill me-2"></i>Put-Call Ratio (PCR)</div>
+            <div id="options-pcr-content"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="options-card">
+            <div class="options-card-title"><i class="bi bi-crosshair me-2"></i>Max Pain &amp; Expiry</div>
+            <div id="options-maxpain-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top OI strikes -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="options-card">
+            <div class="options-card-title"><i class="bi bi-arrow-up-circle-fill text-success me-2"></i>Top Call OI (Resistance)</div>
+            <div id="options-call-oi"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="options-card">
+            <div class="options-card-title"><i class="bi bi-arrow-down-circle-fill text-danger me-2"></i>Top Put OI (Support)</div>
+            <div id="options-put-oi"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market sentiment -->
+      <div class="options-card mb-4">
+        <div class="options-card-title"><i class="bi bi-speedometer2 me-2"></i>Options Market Sentiment</div>
+        <div id="options-sentiment"></div>
+      </div>
+
+    </div>
+
+  </div><!-- /tab-options -->
+
 </main>
 
 <!-- ══════════════════════════════════════════════ DETAIL MODAL ══ -->
@@ -689,6 +817,6 @@
 
 <!-- Cognito SDK — must load before app.js -->
 <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js" crossorigin="anonymous"></script>
-<script src="/js/app.js?v=17"></script>
+<script src="/js/app.js?v=18"></script>
 </body>
 </html>

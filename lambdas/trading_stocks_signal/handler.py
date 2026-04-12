@@ -7,6 +7,7 @@ import os
 import asyncio
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from backend.data.stock_fetcher import StockFetcher
 from backend.agents.signal_agent import SignalAgent
@@ -160,7 +161,9 @@ async def _analyse_all(deadline: float = 0) -> list:
 
 async def _analyse_fresh(symbol: str, name: str, stock_data: dict,
                          sector: str = "Others") -> dict:
-    return await _agent.analyze(symbol, name, stock_data, sector=sector)
+    result = await _agent.analyze(symbol, name, stock_data, sector=sector)
+    result["analysed_at"] = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%I:%M %p")
+    return result
 
 
 async def _analyse_page(page: int, per_page: int) -> list:
