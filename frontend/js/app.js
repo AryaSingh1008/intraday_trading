@@ -226,14 +226,12 @@ function switchTab(tab) {
   // Lazy-load on first switch
   if (tab === "wishlist")  loadWishlist();
   if (tab === "portfolio") loadPortfolio();
-  if (tab === "options")   loadOptions();
 }
 
 function refreshCurrentTab() {
   if (currentTab === "intraday")       loadStocks(true);
   else if (currentTab === "wishlist")  loadWishlist();
   else if (currentTab === "portfolio") loadPortfolio();
-  else if (currentTab === "options")   loadOptions();
 }
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -403,16 +401,13 @@ async function loadStocks(forceRefresh) {
     totalStocksCount = data.total || allStocks.length;
     loadedPages[1] = true;
 
-    renderSummaryCards();
     renderStocks();
-    renderGapScanner();
     renderSignalStats();
+    renderGapScanner();
 
     hideEl("loading-section");
     showEl("summary-row");
     showEl("stocks-section");
-    showEl("gap-scanner-section");
-    showEl("signal-stats-section");
 
     // Sync wishlist hearts
     await loadWishlistSymbols();
@@ -459,44 +454,14 @@ async function _loadRemainingStocks() {
   }
 
   backgroundLoadDone = true;
-  renderSummaryCards();
   renderStocks();
-  renderGapScanner();
   renderSignalStats();
+  renderGapScanner();
   _syncAllHearts();
 }
 
-function renderSummaryCards() {
-  const counts = { BUY: 0, HOLD: 0, SELL: 0 };
-  let totalScore = 0;
-  allStocks.forEach(function(s) {
-    const sig = (s.signal || "HOLD").indexOf("BUY")  >= 0 ? "BUY"
-              : (s.signal || "HOLD").indexOf("SELL") >= 0 ? "SELL" : "HOLD";
-    counts[sig]++;
-    totalScore += s.score || 50;
-  });
-  const avg = allStocks.length ? Math.round(totalScore / allStocks.length) : 0;
-
-  const html = '<div class="col-6 col-md-3">'
-    + '<div class="summary-card sbuy">'
-    + '<div class="s-count text-success">' + counts.BUY + '</div>'
-    + '<div class="s-label">🟢 Buy Signals</div></div></div>'
-    + '<div class="col-6 col-md-3">'
-    + '<div class="summary-card shold">'
-    + '<div class="s-count text-warning">' + counts.HOLD + '</div>'
-    + '<div class="s-label">🟡 Hold Signals</div></div></div>'
-    + '<div class="col-6 col-md-3">'
-    + '<div class="summary-card ssell">'
-    + '<div class="s-count text-danger">' + counts.SELL + '</div>'
-    + '<div class="s-label">🔴 Sell Signals</div></div></div>'
-    + '<div class="col-6 col-md-3">'
-    + '<div class="summary-card sother">'
-    + '<div class="s-count">' + avg + '</div>'
-    + '<div class="s-label">📊 Avg. AI Score</div></div></div>';
-
-  const el = document.getElementById("summary-cards");
-  if (el) el.innerHTML = html;
-}
+// renderSummaryCards is now handled by renderSignalStats which writes to #summary-cards
+function renderSummaryCards() { renderSignalStats(); }
 
 function renderStocks() {
   const grid = document.getElementById("stock-grid");
@@ -1255,49 +1220,53 @@ async function loadIndexData() {
 // ══════════════════════════════════════════════════ GAP SCANNER ════
 
 function renderGapScanner() {
-  const grid = document.getElementById("gap-scanner-grid");
-  if (!grid || !allStocks.length) return;
+  const strip = document.getElementById("gap-strip-inner");
+  if (!strip || !allStocks.length) return;
 
-  // Sort by absolute change_pct, take top 8
+  // Sort by absolute change_pct, take top 10
   const sorted = allStocks
     .filter(function(s) { return s.change_pct != null && !s.unavailable; })
     .sort(function(a, b) { return Math.abs(b.change_pct) - Math.abs(a.change_pct); })
-    .slice(0, 8);
+    .slice(0, 10);
 
-  grid.innerHTML = sorted.map(function(s) {
-    const chg    = s.change_pct || 0;
-    const isUp   = chg >= 0;
-    const cls    = isUp ? "gap-up" : "gap-down";
-    const arrow  = isUp ? "▲" : "▼";
-    const icon   = isUp ? "bi-arrow-up-circle-fill text-success" : "bi-arrow-down-circle-fill text-danger";
-    return '<div class="col-6 col-md-3 col-lg-2">'
-      + '<div class="gap-card ' + cls + '" onclick="showDetail(\'' + s.symbol + '\')">'
-      + '<i class="bi ' + icon + ' gap-icon"></i>'
-      + '<div class="gap-symbol">' + s.symbol.replace(".NS","") + '</div>'
-      + '<div class="gap-name">' + (s.name || "") + '</div>'
-      + '<div class="gap-chg">' + arrow + ' ' + Math.abs(chg).toFixed(2) + '%</div>'
-      + '<div class="gap-price">₹' + fmt(s.current_price) + '</div>'
-      + '</div></div>';
+  strip.innerHTML = sorted.map(function(s) {
+    const chg   = s.change_pct || 0;
+    const isUp  = chg >= 0;
+    const cls   = isUp ? "gp-up" : "gp-down";
+    const arrow = isUp ? "▲" : "▼";
+    return '<span class="gap-pill ' + cls + '" onclick="showDetail(\'' + s.symbol + '\')" title="' + (s.name||s.symbol) + '">'
+      + '<span class="gp-sym">' + s.symbol.replace(".NS","") + '</span>'
+      + '<span class="gp-chg">' + arrow + ' ' + Math.abs(chg).toFixed(2) + '%</span>'
+      + '<span class="gp-price">₹' + fmt(s.current_price) + '</span>'
+      + '</span>';
   }).join("");
+
+  showEl("gap-strip");
 }
 
 // ═══════════════════════════════════════════ SIGNAL STATS (Feature 10) ════
+// Renders into summary-cards — replaces the 4 basic count cards with a richer view.
 
 function renderSignalStats() {
-  const grid = document.getElementById("signal-stats-grid");
-  const tsEl  = document.getElementById("signal-stats-timestamp");
-  if (!grid || !allStocks.length) return;
+  const el = document.getElementById("summary-cards");
+  if (!el || !allStocks.length) return;
 
   const valid = allStocks.filter(function(s) { return !s.unavailable && s.signal; });
+  if (!valid.length) return;
+
   const counts = { "STRONG BUY": 0, "BUY": 0, "HOLD": 0, "SELL": 0, "STRONG SELL": 0 };
   const scores = { "STRONG BUY": [], "BUY": [], "HOLD": [], "SELL": [], "STRONG SELL": [] };
+  let totalScore = 0;
 
   valid.forEach(function(s) {
     if (counts[s.signal] !== undefined) {
       counts[s.signal]++;
       scores[s.signal].push(s.score || 0);
     }
+    totalScore += s.score || 0;
   });
+
+  const avgAll = valid.length ? Math.round(totalScore / valid.length) : 0;
 
   const avgScore = function(arr) {
     return arr.length ? Math.round(arr.reduce(function(a,b){return a+b;},0) / arr.length) : 0;
@@ -1308,17 +1277,12 @@ function renderSignalStats() {
     .sort(function(a,b) { return (b.score||0) - (a.score||0); })
     .slice(0, 5);
 
-  // Timestamp
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-  if (tsEl) tsEl.textContent = "Snapshot at " + timeStr + " · " + valid.length + " stocks analysed";
-
   const defs = [
-    { sig: "STRONG BUY",  cls: "stat-sbuy",  emoji: "🟢" },
-    { sig: "BUY",         cls: "stat-buy",   emoji: "🟢" },
-    { sig: "HOLD",        cls: "stat-hold",  emoji: "🟡" },
-    { sig: "SELL",        cls: "stat-sell",  emoji: "🔴" },
-    { sig: "STRONG SELL", cls: "stat-ssell", emoji: "🔴" },
+    { sig: "STRONG BUY",  cls: "stat-sbuy",  color: "#1e7e34" },
+    { sig: "BUY",         cls: "stat-buy",   color: "#28a745" },
+    { sig: "HOLD",        cls: "stat-hold",  color: "#ffc107" },
+    { sig: "SELL",        cls: "stat-sell",  color: "#dc3545" },
+    { sig: "STRONG SELL", cls: "stat-ssell", color: "#a71d2a" },
   ];
 
   let html = defs.map(function(d) {
@@ -1327,20 +1291,28 @@ function renderSignalStats() {
     const pct = valid.length ? Math.round((cnt / valid.length) * 100) : 0;
     return '<div class="col-6 col-md-4 col-lg-2">'
       + '<div class="signal-stat-card ' + d.cls + '">'
-      + '<div class="ss-emoji">' + d.emoji + '</div>'
       + '<div class="ss-sig">' + d.sig + '</div>'
       + '<div class="ss-count">' + cnt + '</div>'
-      + '<div class="ss-meta">Avg AI: ' + avg + ' · ' + pct + '% of stocks</div>'
-      + '<div class="ss-bar-track"><div class="ss-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="ss-meta">Avg AI: ' + avg + ' &nbsp;·&nbsp; ' + pct + '%</div>'
+      + '<div class="ss-bar-track"><div class="ss-bar-fill" style="width:' + pct + '%;background:' + d.color + '"></div></div>'
       + '</div></div>';
   }).join("");
 
-  // Top 5 BUY picks by AI score
+  // Avg AI score card
+  html += '<div class="col-6 col-md-4 col-lg-2">'
+    + '<div class="signal-stat-card stat-avg">'
+    + '<div class="ss-sig">AVG AI SCORE</div>'
+    + '<div class="ss-count">' + avgAll + '</div>'
+    + '<div class="ss-meta">' + valid.length + ' stocks analysed</div>'
+    + '<div class="ss-bar-track"><div class="ss-bar-fill" style="width:' + avgAll + '%;background:#1a237e"></div></div>'
+    + '</div></div>';
+
+  // Top 5 BUY picks — spans full width below
   if (top5Buy.length) {
-    html += '<div class="col-12 mt-2">'
+    html += '<div class="col-12">'
       + '<div class="signal-stat-card stat-top5">'
-      + '<div class="ss-sig mb-2">🏆 Top BUY Picks by AI Score</div>'
-      + '<div class="d-flex flex-wrap gap-2">'
+      + '<span class="ss-top5-label">🏆 Top BUY Picks by AI Score</span>'
+      + '<div class="d-flex flex-wrap gap-2 mt-2">'
       + top5Buy.map(function(s) {
           return '<span class="top-pick-chip" onclick="showDetail(\'' + s.symbol + '\')">'
             + s.symbol.replace(".NS","") + ' <strong>' + (s.score||0) + '</strong></span>';
@@ -1348,150 +1320,7 @@ function renderSignalStats() {
       + '</div></div></div>';
   }
 
-  grid.innerHTML = html;
-}
-
-// ═══════════════════════════════════════════════════ OPTIONS TAB ════
-
-let _optionsLoaded = false;
-
-async function loadOptions() {
-  const sym = (document.getElementById("options-symbol-select") || {}).value || "NIFTY";
-
-  showEl("options-loading");
-  hideEl("options-error");
-  hideEl("options-content");
-
-  try {
-    const r = await fetch("/api/options?symbol=" + sym);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-
-    if (d.error) throw new Error(d.error);
-
-    hideEl("options-loading");
-    showEl("options-content");
-    _renderOptions(d, sym);
-    _optionsLoaded = true;
-  } catch (e) {
-    hideEl("options-loading");
-    showEl("options-error");
-    console.error("Options load error:", e);
-  }
-}
-
-function _renderOptions(d, sym) {
-  // ── Key metrics ───────────────────────────────────────────────────────────
-  const spot    = d.spot_price || d.underlying_value || null;
-  const pcr     = d.pcr        || d.put_call_ratio   || null;
-  const maxPain = d.max_pain   || null;
-  const expiry  = d.expiry     || d.nearest_expiry   || "—";
-  const ivPerc  = d.iv_percentile != null ? d.iv_percentile : null;
-
-  const metrics = [
-    { label: "Spot Price",     value: spot     != null ? "₹" + Number(spot).toLocaleString("en-IN", {maximumFractionDigits:2}) : "—" },
-    { label: "PCR",            value: pcr      != null ? Number(pcr).toFixed(2) : "—" },
-    { label: "Max Pain",       value: maxPain  != null ? "₹" + Number(maxPain).toLocaleString("en-IN") : "—" },
-    { label: "IV Percentile",  value: ivPerc   != null ? ivPerc + "%" : "—" },
-    { label: "Expiry",         value: expiry },
-    { label: "Symbol",         value: sym },
-  ];
-
-  const metricsEl = document.getElementById("options-metrics");
-  if (metricsEl) {
-    metricsEl.innerHTML = metrics.map(function(m) {
-      return '<div class="col-6 col-md-4 col-lg-2">'
-        + '<div class="opt-metric-card">'
-        + '<div class="opt-metric-val">' + m.value + '</div>'
-        + '<div class="opt-metric-lbl">' + m.label + '</div>'
-        + '</div></div>';
-    }).join("");
-  }
-
-  // ── PCR interpretation ────────────────────────────────────────────────────
-  const pcrEl = document.getElementById("options-pcr-content");
-  if (pcrEl && pcr != null) {
-    const pcrNum = parseFloat(pcr);
-    const pcrDesc = pcrNum > 1.3 ? "⬆️ Bullish — heavy put writing signals market confidence"
-                  : pcrNum < 0.7 ? "⬇️ Bearish — heavy call writing signals selling pressure"
-                  : "↔️ Neutral — balanced put/call activity";
-    const pcrCls  = pcrNum > 1.3 ? "opt-bullish" : pcrNum < 0.7 ? "opt-bearish" : "opt-neutral";
-    pcrEl.innerHTML = '<div class="opt-big-num ' + pcrCls + '">' + pcrNum.toFixed(2) + '</div>'
-      + '<div class="opt-desc">' + pcrDesc + '</div>';
-  } else if (pcrEl) {
-    pcrEl.innerHTML = '<div class="text-muted">PCR data not available</div>';
-  }
-
-  // ── Max pain ──────────────────────────────────────────────────────────────
-  const mpEl = document.getElementById("options-maxpain-content");
-  if (mpEl) {
-    const mpDiff = (spot && maxPain) ? ((maxPain - spot) / spot * 100).toFixed(2) : null;
-    const mpDesc = mpDiff != null
-      ? (parseFloat(mpDiff) > 0 ? "Max pain +" + mpDiff + "% above spot — upside pull" : "Max pain " + mpDiff + "% below spot — downside pull")
-      : "";
-    mpEl.innerHTML = '<div class="opt-big-num">' + (maxPain != null ? "₹" + Number(maxPain).toLocaleString("en-IN") : "—") + '</div>'
-      + '<div class="opt-desc">' + mpDesc + '</div>'
-      + '<div class="opt-desc text-muted mt-1">Expiry: ' + expiry + '</div>';
-  }
-
-  // ── Top Call OI strikes ───────────────────────────────────────────────────
-  const callOI = d.top_call_oi || d.top_calls || [];
-  const callEl = document.getElementById("options-call-oi");
-  if (callEl) {
-    callEl.innerHTML = callOI.length
-      ? '<table class="opt-oi-table">'
-        + '<tr><th>Strike</th><th>OI (Lakh)</th><th>Chg OI</th><th>IV</th></tr>'
-        + callOI.slice(0,5).map(function(c) {
-            const oi  = c.oi    || c.openInterest || 0;
-            const chg = c.oi_change || c.changeinOpenInterest || 0;
-            const iv  = c.iv   || c.impliedVolatility || null;
-            const chgCls = chg >= 0 ? "text-success" : "text-danger";
-            return '<tr>'
-              + '<td><strong>₹' + (c.strike || c.strikePrice || "—") + '</strong></td>'
-              + '<td>' + (oi/100000).toFixed(1) + 'L</td>'
-              + '<td class="' + chgCls + '">' + (chg >= 0 ? "+" : "") + (chg/100000).toFixed(1) + 'L</td>'
-              + '<td>' + (iv != null ? iv.toFixed(1) + "%" : "—") + '</td>'
-              + '</tr>';
-          }).join("")
-        + '</table>'
-      : '<div class="text-muted">No call OI data</div>';
-  }
-
-  // ── Top Put OI strikes ────────────────────────────────────────────────────
-  const putOI = d.top_put_oi || d.top_puts || [];
-  const putEl = document.getElementById("options-put-oi");
-  if (putEl) {
-    putEl.innerHTML = putOI.length
-      ? '<table class="opt-oi-table">'
-        + '<tr><th>Strike</th><th>OI (Lakh)</th><th>Chg OI</th><th>IV</th></tr>'
-        + putOI.slice(0,5).map(function(c) {
-            const oi  = c.oi    || c.openInterest || 0;
-            const chg = c.oi_change || c.changeinOpenInterest || 0;
-            const iv  = c.iv   || c.impliedVolatility || null;
-            const chgCls = chg >= 0 ? "text-success" : "text-danger";
-            return '<tr>'
-              + '<td><strong>₹' + (c.strike || c.strikePrice || "—") + '</strong></td>'
-              + '<td>' + (oi/100000).toFixed(1) + 'L</td>'
-              + '<td class="' + chgCls + '">' + (chg >= 0 ? "+" : "") + (chg/100000).toFixed(1) + 'L</td>'
-              + '<td>' + (iv != null ? iv.toFixed(1) + "%" : "—") + '</td>'
-              + '</tr>';
-          }).join("")
-        + '</table>'
-      : '<div class="text-muted">No put OI data</div>';
-  }
-
-  // ── Market sentiment ──────────────────────────────────────────────────────
-  const sentEl = document.getElementById("options-sentiment");
-  if (sentEl) {
-    const sent     = d.sentiment || d.market_sentiment || "";
-    const sentDesc = d.sentiment_reason || d.analysis || "";
-    const sentCls  = sent.toLowerCase().includes("bull") ? "opt-bullish"
-                   : sent.toLowerCase().includes("bear") ? "opt-bearish" : "opt-neutral";
-    sentEl.innerHTML = sent
-      ? '<div class="opt-sentiment-badge ' + sentCls + '">' + sent + '</div>'
-        + (sentDesc ? '<div class="opt-desc mt-2">' + sentDesc + '</div>' : '')
-      : '<div class="text-muted">Sentiment data not available</div>';
-  }
+  el.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════════════════ COUNTDOWN ════

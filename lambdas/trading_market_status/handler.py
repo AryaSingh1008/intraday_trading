@@ -1,6 +1,7 @@
 """
 Lambda handler: GET /api/market-status
-Returns IST market open/closed status + live NIFTY 50, BANKNIFTY, India VIX index data.
+Returns IST market open/closed status + NIFTY 50, BANKNIFTY, India VIX.
+Uses last 5 days of history so values are always available even when closed.
 """
 import json
 from datetime import datetime
@@ -9,30 +10,53 @@ from zoneinfo import ZoneInfo
 IST = ZoneInfo("Asia/Kolkata")
 
 _INDICES = {
-    "^NSEI":   "NIFTY 50",
-    "^NSEBANK": "BANKNIFTY",
+    "^NSEI":     "NIFTY 50",
+    "^NSEBANK":  "BANKNIFTY",
     "^INDIAVIX": "India VIX",
 }
 
 
 def _fetch_indices() -> dict:
-    """Fetch live NIFTY 50, BANKNIFTY, India VIX via yfinance."""
-    result = {}
+    """
+    Fetch last close + previous close for each index.
+    Downloads 5 days of daily history so the most recent close is always
+    available regardless of whether the market is currently open or closed.
+    """
+    result = {label: {"price": None, "change_pct": None} for label in _INDICES.values()}
     try:
         import yfinance as yf
-        tickers = yf.Tickers(" ".join(_INDICES.keys()))
-        for ticker_sym, label in _INDICES.items():
+        syms = list(_INDICES.keys())
+        data = yf.download(
+            syms,
+            period="5d",
+            interval="1d",
+            group_by="ticker",
+            progress=False,
+            auto_adjust=True,
+        )
+        if data.empty:
+            return result
+
+        for sym, label in _INDICES.items():
             try:
-                info = tickers.tickers[ticker_sym].fast_info
-                price     = float(info.last_price)    if info.last_price    else None
-                prev_close= float(info.previous_close) if info.previous_close else None
-                change_pct = round(((price - prev_close) / prev_close) * 100, 2) if (price and prev_close) else None
+                if len(syms) == 1:
+                    closes = data["Close"].dropna()
+                else:
+                    closes = data[sym]["Close"].dropna()
+
+                if len(closes) < 1:
+                    continue
+
+                price      = float(closes.iloc[-1])
+                prev_close = float(closes.iloc[-2]) if len(closes) >= 2 else price
+                change_pct = round(((price - prev_close) / prev_close) * 100, 2) if prev_close else None
+
                 result[label] = {
-                    "price":      round(price, 2) if price else None,
+                    "price":      round(price, 2),
                     "change_pct": change_pct,
                 }
             except Exception:
-                result[label] = {"price": None, "change_pct": None}
+                pass
     except Exception:
         pass
     return result

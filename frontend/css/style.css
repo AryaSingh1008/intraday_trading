@@ -1382,49 +1382,78 @@ body {
   margin-bottom: 2px;
 }
 
-/* ═══════════════════════════════════════════════ GAP SCANNER ════ */
-.gap-card {
+/* ═══════════════════════════════════════════════ GAP STRIP ════ */
+.gap-strip {
   background: #fff;
-  border-radius: 12px;
-  padding: 14px 12px;
-  text-align: center;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: transform .2s, box-shadow .2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  border-bottom: 1px solid #e9ecef;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
 }
-.gap-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
-.gap-card.gap-up   { border-color: #28a745; }
-.gap-card.gap-down { border-color: #dc3545; }
-.gap-icon  { font-size: 1.4rem; }
-.gap-symbol { font-size: 0.95rem; font-weight: 800; color: #212529; margin-top: 4px; }
-.gap-name   { font-size: 0.7rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gap-chg    { font-size: 1.1rem; font-weight: 800; margin-top: 4px; }
-.gap-price  { font-size: 0.8rem; color: #495057; }
-.gap-card.gap-up   .gap-chg { color: #155724; }
-.gap-card.gap-down .gap-chg { color: #721c24; }
+.gap-strip-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f6a800;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.gap-strip-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.gap-strip-scroll::-webkit-scrollbar { display: none; }
+.gap-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1.5px solid transparent;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.gap-pill:hover { opacity: 0.8; }
+.gap-pill.gp-up   { background: #d4edda; border-color: #28a745; color: #155724; }
+.gap-pill.gp-down { background: #f8d7da; border-color: #dc3545; color: #721c24; }
+.gp-sym   { font-weight: 800; }
+.gp-chg   { font-size: 0.78rem; }
+.gp-price { font-size: 0.74rem; opacity: 0.75; }
 
 /* ════════════════════════════════════ SIGNAL STATS (Feature 10) ════ */
 .signal-stat-card {
   background: #fff;
   border-radius: 12px;
-  padding: 16px 14px;
+  padding: 14px 14px 12px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  box-shadow: var(--shadow);
   border-top: 4px solid #dee2e6;
+  height: 100%;
 }
 .signal-stat-card.stat-sbuy  { border-color: #1e7e34; }
 .signal-stat-card.stat-buy   { border-color: #28a745; }
 .signal-stat-card.stat-hold  { border-color: #ffc107; }
 .signal-stat-card.stat-sell  { border-color: #dc3545; }
 .signal-stat-card.stat-ssell { border-color: #a71d2a; }
-.signal-stat-card.stat-top5  { border-color: #1a237e; text-align: left; }
-.ss-emoji  { font-size: 1.5rem; }
-.ss-sig    { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 4px 0 2px; }
-.ss-count  { font-size: 2rem; font-weight: 800; color: #212529; line-height: 1; }
-.ss-meta   { font-size: 0.7rem; color: #888; margin-top: 4px; }
-.ss-bar-track { background: #e9ecef; border-radius: 4px; height: 5px; margin-top: 8px; }
-.ss-bar-fill  { height: 5px; border-radius: 4px; background: #1a237e; }
+.signal-stat-card.stat-avg   { border-color: #1a237e; }
+.signal-stat-card.stat-top5  { border-color: #1a237e; text-align: left; padding: 12px 16px; }
+.ss-sig    { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #666; margin-bottom: 2px; }
+.ss-count  { font-size: 2.2rem; font-weight: 800; color: #212529; line-height: 1.1; }
+.ss-meta   { font-size: 0.68rem; color: #888; margin-top: 4px; }
+.ss-bar-track { background: #e9ecef; border-radius: 4px; height: 4px; margin-top: 8px; }
+.ss-bar-fill  { height: 4px; border-radius: 4px; }
+.ss-top5-label { font-size: 0.8rem; font-weight: 700; color: #1a237e; }
 .top-pick-chip {
   display: inline-block;
   background: #e8f4fd;
