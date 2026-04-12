@@ -88,13 +88,12 @@ function onAuthSuccess(user) {
   document.getElementById("auth-container").style.display = "none";
   document.getElementById("app-container").style.display  = "";
   // Boot the app
-  loadMarketStatus();
+
   loadStocks(false);
   loadNews();
   loadWishlistCount();
   loadKnownStocks();
   startCountdown();
-  setInterval(loadMarketStatus, 60_000);
   document.addEventListener("click", function(e) {
     const wrap = document.querySelector(".wishlist-input-wrap");
     const sugg = document.getElementById("search-suggestions");
@@ -367,19 +366,6 @@ async function analyseCustomStock() {
 }
 
 // ── Market status ─────────────────────────────────────────────────────────────
-async function loadMarketStatus() {
-  try {
-    const r = await fetch("/api/market-status");
-    if (!r.ok) return;
-    const d = await r.json();
-
-    const badgeIn = document.getElementById("badge-in");
-    if (d.indian) {
-      badgeIn.textContent = "🇮🇳 India — " + d.indian.time + " " + d.indian.label;
-      badgeIn.className   = "badge-market " + (d.indian.open ? "open" : "closed");
-    }
-  } catch (_) {}
-}
 
 // ═══════════════════════════════════════════════════════════════ INTRADAY TAB ═
 
