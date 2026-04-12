@@ -311,10 +311,10 @@ resource "aws_lambda_function" "market_status" {
   handler          = "handler.handler"
   filename         = data.archive_file.market_status.output_path
   source_code_hash = data.archive_file.market_status.output_base64sha256
-  timeout          = 5
-  memory_size      = 128
+  timeout          = 15
+  memory_size      = 256
 
-  layers = compact([local.backend_layer_arn])
+  layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
 
   environment {
     variables = local.common_env
