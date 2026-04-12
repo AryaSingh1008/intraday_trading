@@ -27,6 +27,8 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 | **News Sentiment** | Separate tab / manual reading | Built into signal score — 6 RSS feeds auto-weighted by recency + source authority |
 | **Data Source** | Paid APIs | 100% free (yfinance, NSE, Google News RSS, Bedrock AI) |
 | **Infrastructure** | Always-on servers | Serverless — scales to $0 when market is closed |
+| **Index Strip** | Separate terminal / app | NIFTY 50, BANKNIFTY, India VIX live in the header — always visible |
+| **R:R Ratio** | Manual calculation | Auto-calculated on every signal card from ATR-based targets |
 | **Options Analysis** | Separate platform | PCR, IV percentile, Greeks, max-pain — all in-dashboard |
 | **Export** | Screenshot or manual | One-click Excel export of all 80 stocks |
 | **Mobile** | Desktop-first | Mobile-responsive — built for trading from a phone |
@@ -93,6 +95,27 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - Per-user wishlist and portfolio — every account sees only its own data
 - Logout button in the header clears the session instantly
 - All API routes protected by a JWT authorizer on API Gateway — unauthenticated requests get `401`
+
+### 📉 Live Index Strip
+- **NIFTY 50, BANKNIFTY, India VIX** displayed as a persistent strip below the header — always visible
+- Shows last closing price when market is closed, live price during trading hours
+- Colour-coded change % (green = up, red = down), refreshes every 5 minutes
+- Fetched via Yahoo Finance v8 chart API (direct HTTP — no yfinance overhead, sub-3s response)
+
+### ⚡ Top Movers Strip
+- Horizontal scrolling pill strip showing the **biggest % movers** from the current stock analysis
+- Always visible above the stock grid — no need to dig into tabs
+- Each pill shows symbol, direction arrow, % change, and current price
+
+### 📊 Signal Summary Cards
+- **5 signal-type counts** (STRONG BUY / BUY / HOLD / SELL / STRONG SELL) displayed as cards at the top of the Intraday tab
+- Avg AI confidence score card — shows overall market sentiment at a glance
+- Top 5 stock picks highlighted as chips inside the card
+
+### 🎯 Risk:Reward Ratio on Every Card
+- Each stock card shows **R:R ratio** (e.g. R:R 1:2.4) calculated from ATR-based target and stop-loss
+- Colour-coded: green ≥ 2:1, amber ≥ 1:1, red < 1:1
+- Signal timestamp shows when the analysis was last computed (IST)
 
 ### 🕐 Market Status & Auto-Refresh
 - IST market hours indicator (9:15 AM – 3:30 PM, weekdays)
@@ -315,7 +338,7 @@ User: "Should I buy RELIANCE today?"
 | `trading_news_sentiment` | News aggregation endpoint | 20s | backend, nlp |
 | `trading_wishlist` | Wishlist CRUD operations | 10s | backend |
 | `trading_portfolio` | Holdings P&L tracker | 10s | backend |
-| `trading_market_status` | IST market hours check | 5s | backend |
+| `trading_market_status` | IST market hours + NIFTY 50 / BANKNIFTY / India VIX live prices | 15s | backend, heavy |
 | `trading_excel_export` | XLSX generation + pre-signed S3 URL | 10s | backend, export |
 | `trading_cache_clear` | Manual cache invalidation | 5s | backend |
 
@@ -340,6 +363,7 @@ User: "Should I buy RELIANCE today?"
 | Options Chain | NSE Public API (curl_cffi TLS fingerprint) | Real-time | Fallback: Yahoo Finance → Synthetic chain |
 | NIFTY 50 Index | Yahoo Finance | Real-time | Shared fetch for relative strength calculation |
 | Market Status | Local IST time | Hardcoded | 9:15 AM – 3:30 PM IST, weekdays |
+| NIFTY 50 / BANKNIFTY / India VIX | Yahoo Finance v8 chart API (direct HTTP) | Every 5 min | Shown in index strip — last close when market is closed, live during hours |
 
 ---
 
