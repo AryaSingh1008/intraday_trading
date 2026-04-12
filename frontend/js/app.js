@@ -409,9 +409,6 @@ async function loadStocks(forceRefresh) {
     totalStocksCount = data.total || allStocks.length;
     loadedPages[1] = true;
 
-    const lu = document.getElementById("last-updated-text");
-    if (lu) lu.textContent = "Updated: " + (data.last_updated || "");
-
     renderSummaryCards();
     renderStocks();
 
