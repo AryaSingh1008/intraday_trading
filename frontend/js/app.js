@@ -188,6 +188,7 @@ let currentModalSymbol = null;
 let currentTab         = "intraday";
 let countdownTimer     = null;
 let countdownSecs      = 300;
+let marketIsOpen       = false;   // updated by loadIndexData(); drives refresh interval
 let knownStocks        = [];
 let currentPage        = 1;
 const STOCKS_PER_PAGE  = 20;
@@ -686,6 +687,13 @@ function stockCard(s, fromWishlist) {
     + '</div>'
     + '<div class="stock-price mb-1">₹' + fmt(s.current_price)
     + ' <span class="stock-change ' + chgCls + '">' + chgArrow + " " + Math.abs(chg).toFixed(2) + '%</span></div>'
+  + (s.day_high && s.day_low
+      ? '<div class="day-hl"><span class="day-h">H ₹' + fmt(s.day_high) + '</span>'
+        + '<span class="day-sep">|</span>'
+        + '<span class="day-l">L ₹' + fmt(s.day_low) + '</span>'
+        + (s.orb_high ? '<span class="orb-tag">ORB</span>' : '')
+        + '</div>'
+      : '')
     + '<div class="d-flex justify-content-between align-items-center mb-2">'
     + '<small class="text-muted">AI Score: <strong>' + (s.score||0) + '/100</strong></small>'
     + '<div class="d-flex gap-1 align-items-center">'
@@ -767,11 +775,16 @@ async function showDetail(symbol) {
     const stats = [
       { v: "₹" + fmt(s.current_price),                l: "Current Price"   },
       { v: (s.change_pct||0).toFixed(2) + "%",        l: "Today's Change"  },
-      { v: "₹" + fmt(s.high_52w),                     l: "52W High"        },
-      { v: "₹" + fmt(s.low_52w),                      l: "52W Low"         },
+      { v: s.day_high ? "₹" + fmt(s.day_high) : "—", l: "📈 Day High"     },
+      { v: s.day_low  ? "₹" + fmt(s.day_low)  : "—", l: "📉 Day Low"      },
       { v: fmtVol(s.volume),                           l: "Volume"          },
       { v: fmtVol(s.avg_volume),                       l: "Avg Volume"      },
+      { v: "₹" + fmt(s.high_52w),                     l: "52W High"        },
+      { v: "₹" + fmt(s.low_52w),                      l: "52W Low"         },
     ];
+    // ORB levels (if computed today)
+    if (s.orb_high) stats.push({ v: "₹" + fmt(s.orb_high), l: "⚡ ORB High" });
+    if (s.orb_low)  stats.push({ v: "₹" + fmt(s.orb_low),  l: "⚡ ORB Low"  });
     // VWAP
     if (s.vwap)  stats.push({ v: "₹" + fmt(s.vwap),  l: "📊 VWAP (today)"  });
     // Support/resistance
@@ -1185,6 +1198,19 @@ async function loadIndexData() {
       badge.className    = "idx-status " + (d.is_open ? "idx-open" : "idx-closed");
     }
 
+    // Adjust refresh interval: 60s during market hours, 300s after hours
+    const wasOpen = marketIsOpen;
+    marketIsOpen  = d.is_open || false;
+    if (marketIsOpen !== wasOpen) {
+      // Market open/close state changed — restart countdown with new interval
+      startCountdown();
+    }
+    // Update refresh label to reflect current interval
+    const refreshLabel = document.getElementById("refresh-interval-label");
+    if (refreshLabel) {
+      refreshLabel.textContent = marketIsOpen ? "60s" : "5m";
+    }
+
     const indices = d.indices || {};
 
     function _setIdx(priceId, chgId, label) {
@@ -1326,7 +1352,10 @@ function renderSignalStats() {
 // ═══════════════════════════════════════════════════════════════ COUNTDOWN ════
 
 function startCountdown() {
-  countdownSecs = 300;
+  // 60s during market hours (9:15–3:30 IST), 300s after hours
+  const interval = () => marketIsOpen ? 60 : 300;
+  countdownSecs = interval();
+
   const txt = document.getElementById("countdown");
   const bar = document.getElementById("refresh-progress");
 
@@ -1334,11 +1363,12 @@ function startCountdown() {
 
   countdownTimer = setInterval(function() {
     countdownSecs--;
+    const total = interval();
     if (txt) txt.textContent = countdownSecs;
-    if (bar) bar.style.width = ((300 - countdownSecs) / 300 * 100) + "%";
+    if (bar) bar.style.width = ((total - countdownSecs) / total * 100) + "%";
 
     if (countdownSecs <= 0) {
-      countdownSecs = 300;
+      countdownSecs = interval();
       loadStocks(true);
       loadNews();
       loadIndexData();

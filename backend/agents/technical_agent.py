@@ -293,6 +293,57 @@ class TechnicalAgent:
                     score -= 8
                     reasons.append(f"Price ₹{current_price:.0f} is below VWAP ₹{vwap_val:.0f} ({diff_pct:.1f}%) — intraday bearish bias")
 
+            # ── 7b. Opening Range Breakout (ORB) ───────────────────────────────
+            # First 15m candle (9:15–9:30 IST) sets the day's bias.
+            # Breakout above ORB high = strong intraday bullish signal.
+            # Breakdown below ORB low = strong intraday bearish signal.
+            if intraday and len(intraday) >= 2 and current_price > 0:
+                try:
+                    orb_high  = intraday[0]["high"]
+                    orb_low   = intraday[0]["low"]
+                    orb_range = orb_high - orb_low
+
+                    if orb_range > 0 and orb_high > 0:
+                        vol_confirmed = (avg_volume > 0 and volume > avg_volume * 1.2)
+
+                        if current_price > orb_high:
+                            pts = 10 if vol_confirmed else 6
+                            score += pts
+                            reasons.append(
+                                f"ORB breakout — price ₹{current_price:.0f} above opening range high"
+                                f" ₹{orb_high:.0f}"
+                                + (" — volume confirmed ✅" if vol_confirmed else "")
+                            )
+                            extras["orb_high"] = round(orb_high, 2)
+                            extras["orb_low"]  = round(orb_low,  2)
+                        elif current_price < orb_low:
+                            pts = 10 if vol_confirmed else 6
+                            score -= pts
+                            reasons.append(
+                                f"ORB breakdown — price ₹{current_price:.0f} below opening range low"
+                                f" ₹{orb_low:.0f}"
+                                + (" — volume confirmed ⚠️" if vol_confirmed else "")
+                            )
+                            extras["orb_high"] = round(orb_high, 2)
+                            extras["orb_low"]  = round(orb_low,  2)
+                        else:
+                            # Inside range — note proximity to breakout/breakdown levels
+                            pos = (current_price - orb_low) / orb_range
+                            if pos > 0.75:
+                                reasons.append(
+                                    f"Inside opening range — near ORB high ₹{orb_high:.0f},"
+                                    f" watch for breakout"
+                                )
+                            elif pos < 0.25:
+                                reasons.append(
+                                    f"Inside opening range — near ORB low ₹{orb_low:.0f},"
+                                    f" watch for breakdown"
+                                )
+                            extras["orb_high"] = round(orb_high, 2)
+                            extras["orb_low"]  = round(orb_low,  2)
+                except Exception:
+                    pass
+
             # ── 8.  Support & Resistance (pivot points) ────────────────────────
             pivots = self._pivot_points(high, low, close)
             if pivots:

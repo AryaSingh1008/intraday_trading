@@ -123,6 +123,10 @@ class StockFetcher:
                 except Exception:
                     pass
 
+                # Day high/low from today's 15m bars — critical for intraday context
+                day_high = round(max(b["high"] for b in intraday), 2) if intraday else None
+                day_low  = round(min(b["low"]  for b in intraday), 2) if intraday else None
+
                 results[symbol] = {
                     "symbol":        symbol,
                     "current_price": current_price,
@@ -132,6 +136,8 @@ class StockFetcher:
                     "avg_volume":    int(hist["Volume"].mean())   if "Volume" in hist.columns else 1,
                     "high_52w":      round(float(hist["High"].max()), 2),
                     "low_52w":       round(float(hist["Low"].min()),  2),
+                    "day_high":      day_high,
+                    "day_low":       day_low,
                     "hist":          hist,
                     "intraday":      intraday,
                     "nifty_hist":    nifty_close,  # shared NIFTY 50 close series
@@ -220,6 +226,9 @@ class StockFetcher:
             except Exception:
                 pass
 
+            day_high = round(max(b["high"] for b in intraday), 2) if intraday else None
+            day_low  = round(min(b["low"]  for b in intraday), 2) if intraday else None
+
             return {
                 "symbol":        symbol,
                 "current_price": round(current_price, 2),
@@ -229,6 +238,8 @@ class StockFetcher:
                 "avg_volume":    int(hist["Volume"].mean())   if "Volume" in hist.columns else 1,
                 "high_52w":      round(float(hist["High"].max()), 2),
                 "low_52w":       round(float(hist["Low"].min()),  2),
+                "day_high":      day_high,
+                "day_low":       day_low,
                 "hist":          hist,        # DataFrame used by agents
                 "intraday":      intraday,    # list of dicts for chart + VWAP
                 "nifty_hist":    nifty_close, # NIFTY 50 close series

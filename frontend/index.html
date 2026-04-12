@@ -12,7 +12,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=17"/>
+  <link rel="stylesheet" href="/css/style.css?v=18"/>
 </head>
 <body>
 
@@ -201,7 +201,7 @@
 
 <!-- ══════════════════════════════════════════════ AUTO-REFRESH BAR ══ -->
 <div class="refresh-bar" id="refresh-bar">
-  <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">900</strong>s</span>
+  <span id="refresh-countdown-text">Auto-refresh in <strong id="countdown">300</strong>s &nbsp;<span class="refresh-interval-badge" id="refresh-interval-label">5m</span></span>
   <div class="refresh-progress-outer">
     <div class="refresh-progress-inner" id="refresh-progress"></div>
   </div>
@@ -724,6 +724,6 @@
 
 <!-- Cognito SDK — must load before app.js -->
 <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js" crossorigin="anonymous"></script>
-<script src="/js/app.js?v=19"></script>
+<script src="/js/app.js?v=20"></script>
 </body>
 </html>

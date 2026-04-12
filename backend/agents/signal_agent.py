@@ -213,6 +213,10 @@ class SignalAgent:
                 "vwap":             tech_extras.get("vwap"),
                 "support_level":    tech_extras.get("support_level"),
                 "resistance_level": tech_extras.get("resistance_level"),
+                "orb_high":         tech_extras.get("orb_high"),
+                "orb_low":          tech_extras.get("orb_low"),
+                "day_high":         stock_data.get("day_high"),
+                "day_low":          stock_data.get("day_low"),
             }
 
         except Exception as e:
