@@ -17,8 +17,6 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key
 
-USER_ID = "default"   # Single-user mode; extend to Cognito sub for multi-user
-
 _table = None
 
 
@@ -31,9 +29,18 @@ def _get_table():
     return _table
 
 
+def _get_user_id(event: dict) -> str:
+    """Extract the Cognito user's unique sub from the JWT authorizer context."""
+    try:
+        return event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+    except (KeyError, TypeError):
+        return "default"  # fallback for local dev / unit tests
+
+
 def handler(event, context):
     method      = event.get("requestContext", {}).get("http", {}).get("method", "GET")
     path_params = event.get("pathParameters") or {}
+    user_id     = _get_user_id(event)
     table       = _get_table()
 
     # ── DELETE /api/portfolio/{holding_id} ────────────────────────────────────
@@ -41,7 +48,7 @@ def handler(event, context):
         holding_id = path_params.get("holding_id", "")
         if not holding_id:
             return _json({"error": "holding_id required"}, 400)
-        table.delete_item(Key={"user_id": USER_ID, "holding_id": holding_id})
+        table.delete_item(Key={"user_id": user_id, "holding_id": holding_id})
         return _json({"removed": holding_id})
 
     # ── POST /api/portfolio ───────────────────────────────────────────────────
@@ -66,7 +73,7 @@ def handler(event, context):
 
         holding_id = str(uuid.uuid4())
         table.put_item(Item={
-            "user_id":    USER_ID,
+            "user_id":    user_id,
             "holding_id": holding_id,
             "symbol":     symbol,
             "name":       name,
@@ -79,7 +86,7 @@ def handler(event, context):
 
     # ── GET /api/portfolio ────────────────────────────────────────────────────
     resp     = table.query(
-        KeyConditionExpression=Key("user_id").eq(USER_ID)
+        KeyConditionExpression=Key("user_id").eq(user_id)
     )
     holdings = resp.get("Items", [])
 

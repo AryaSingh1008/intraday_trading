@@ -7,8 +7,6 @@ import os
 import time
 import boto3
 
-USER_ID = "default"   # Single-user mode; extend to cognito sub for multi-user
-
 _dynamodb = None
 _table    = None
 
@@ -21,23 +19,32 @@ def _get_table():
     return _table
 
 
+def _get_user_id(event: dict) -> str:
+    """Extract the Cognito user's unique sub from the JWT authorizer context."""
+    try:
+        return event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+    except (KeyError, TypeError):
+        return "default"  # fallback for local dev / unit tests
+
+
 def handler(event, context):
     method      = event.get("requestContext", {}).get("http", {}).get("method", "GET")
     raw_path    = event.get("rawPath", "")
     path_params = event.get("pathParameters") or {}
 
-    table = _get_table()
+    user_id = _get_user_id(event)
+    table   = _get_table()
 
     # GET /api/wishlist/check/{symbol}
     if "check" in raw_path and path_params.get("symbol"):
         symbol = path_params["symbol"].upper()
-        resp   = table.get_item(Key={"user_id": USER_ID, "symbol": symbol})
+        resp   = table.get_item(Key={"user_id": user_id, "symbol": symbol})
         return _json({"in_wishlist": "Item" in resp})
 
     # DELETE /api/wishlist/{symbol}
     if method == "DELETE" and path_params.get("symbol"):
         symbol = path_params["symbol"].upper()
-        table.delete_item(Key={"user_id": USER_ID, "symbol": symbol})
+        table.delete_item(Key={"user_id": user_id, "symbol": symbol})
         return _json({"removed": symbol})
 
     # POST /api/wishlist
@@ -48,7 +55,7 @@ def handler(event, context):
         if not symbol:
             return _json({"error": "symbol required"}, 400)
         table.put_item(Item={
-            "user_id":  USER_ID,
+            "user_id":  user_id,
             "symbol":   symbol,
             "name":     name,
             "added_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -57,7 +64,7 @@ def handler(event, context):
 
     # GET /api/wishlist
     response = table.query(
-        KeyConditionExpression=boto3.dynamodb.conditions.Key("user_id").eq(USER_ID)
+        KeyConditionExpression=boto3.dynamodb.conditions.Key("user_id").eq(user_id)
     )
     items = [{"symbol": i["symbol"], "name": i.get("name", i["symbol"])}
              for i in response.get("Items", [])]

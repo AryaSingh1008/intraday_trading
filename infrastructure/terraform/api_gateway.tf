@@ -106,81 +106,107 @@ resource "aws_apigatewayv2_integration" "bedrock_chat" {
 # Routes — mirrors the existing FastAPI endpoints exactly
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_apigatewayv2_route" "get_stocks" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/stocks"
-  target    = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/stocks"
+  target             = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_stock_detail" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/stock/{symbol}"
-  target    = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/stock/{symbol}"
+  target             = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_stocks_list" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/stocks/list"
-  target    = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/stocks/list"
+  target             = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_options" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/options"
-  target    = "integrations/${aws_apigatewayv2_integration.options_analysis.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/options"
+  target             = "integrations/${aws_apigatewayv2_integration.options_analysis.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_news" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/news"
-  target    = "integrations/${aws_apigatewayv2_integration.news_sentiment.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/news"
+  target             = "integrations/${aws_apigatewayv2_integration.news_sentiment.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_export" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/export"
-  target    = "integrations/${aws_apigatewayv2_integration.excel_export.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/export"
+  target             = "integrations/${aws_apigatewayv2_integration.excel_export.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_market_status" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/market-status"
-  target    = "integrations/${aws_apigatewayv2_integration.market_status.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/market-status"
+  target             = "integrations/${aws_apigatewayv2_integration.market_status.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "delete_cache" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "DELETE /api/cache"
-  target    = "integrations/${aws_apigatewayv2_integration.cache_clear.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /api/cache"
+  target             = "integrations/${aws_apigatewayv2_integration.cache_clear.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "get_wishlist" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/wishlist"
-  target    = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/wishlist"
+  target             = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "post_wishlist" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "POST /api/wishlist"
-  target    = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /api/wishlist"
+  target             = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "delete_wishlist" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "DELETE /api/wishlist/{symbol}"
-  target    = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /api/wishlist/{symbol}"
+  target             = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "check_wishlist" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/wishlist/check/{symbol}"
-  target    = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/wishlist/check/{symbol}"
+  target             = "integrations/${aws_apigatewayv2_integration.wishlist.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "post_chat" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "POST /api/chat"
-  target    = "integrations/${aws_apigatewayv2_integration.bedrock_chat.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /api/chat"
+  target             = "integrations/${aws_apigatewayv2_integration.bedrock_chat.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_integration" "portfolio" {
@@ -192,19 +218,25 @@ resource "aws_apigatewayv2_integration" "portfolio" {
 }
 
 resource "aws_apigatewayv2_route" "get_portfolio" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "GET /api/portfolio"
-  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/portfolio"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "post_portfolio" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "POST /api/portfolio"
-  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /api/portfolio"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "delete_portfolio" {
-  api_id    = aws_apigatewayv2_api.main.id
-  route_key = "DELETE /api/portfolio/{holding_id}"
-  target    = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /api/portfolio/{holding_id}"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }

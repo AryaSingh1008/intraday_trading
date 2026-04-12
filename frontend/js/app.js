@@ -5,6 +5,173 @@
 
 "use strict";
 
+// ── Cognito Auth Config ───────────────────────────────────────────────────────
+// Fill these in after running: terraform output cognito_user_pool_id / cognito_client_id
+const COGNITO_USER_POOL_ID = "REPLACE_WITH_USER_POOL_ID";   // e.g. us-east-1_AbCdEfGhI
+const COGNITO_CLIENT_ID    = "REPLACE_WITH_CLIENT_ID";       // e.g. 1a2b3c4d5e6f7g8h9i0j
+
+const _userPool = new AmazonCognitoIdentity.CognitoUserPool({
+  UserPoolId: COGNITO_USER_POOL_ID,
+  ClientId:   COGNITO_CLIENT_ID,
+});
+let _cognitoUser     = null;
+let _pendingEmail    = "";   // stored between signup → confirm steps
+
+// ── Authenticated fetch wrapper ───────────────────────────────────────────────
+// Intercepts every /api/* call and injects the Cognito ID token.
+// getSession() auto-refreshes the token when it expires — no extra code needed.
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+  if (typeof url === "string" && url.startsWith("/api/")) {
+    return new Promise((resolve, reject) => {
+      const user = _userPool.getCurrentUser();
+      if (!user) { doLogout(); return reject(new Error("Not authenticated")); }
+      user.getSession((err, session) => {
+        if (err || !session.isValid()) { doLogout(); return reject(new Error("Session expired")); }
+        const token = session.getIdToken().getJwtToken();
+        opts = opts || {};
+        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: token });
+        _origFetch(url, opts)
+          .then(resp => { if (resp.status === 401) doLogout(); resolve(resp); })
+          .catch(reject);
+      });
+    });
+  }
+  return _origFetch(url, opts);
+};
+
+// ── Auth UI helpers ───────────────────────────────────────────────────────────
+function showAuthUI() {
+  document.getElementById("auth-container").style.display = "";
+  document.getElementById("app-container").style.display  = "none";
+  showAuthForm("form-login");
+}
+
+function showAuthForm(id) {
+  ["form-login", "form-signup", "form-confirm"].forEach(f => {
+    document.getElementById(f).classList.add("d-none");
+  });
+  document.getElementById(id).classList.remove("d-none");
+  document.getElementById("auth-error").classList.add("d-none");
+  document.getElementById("auth-success").classList.add("d-none");
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById("auth-error");
+  el.textContent = msg;
+  el.classList.remove("d-none");
+}
+
+function showAuthSuccess(msg) {
+  const el = document.getElementById("auth-success");
+  el.textContent = msg;
+  el.classList.remove("d-none");
+}
+
+function _setAuthBtnLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.classList.toggle("auth-btn-loading", loading);
+}
+
+function onAuthSuccess(user) {
+  _cognitoUser = user;
+  // Show the email in the header
+  user.getSession((err, session) => {
+    if (!err && session) {
+      const email = session.getIdToken().payload.email || "";
+      const el = document.getElementById("user-email-display");
+      if (el) el.textContent = email;
+    }
+  });
+  document.getElementById("auth-container").style.display = "none";
+  document.getElementById("app-container").style.display  = "";
+  // Boot the app
+  loadMarketStatus();
+  loadStocks(false);
+  loadNews();
+  loadWishlistCount();
+  loadKnownStocks();
+  startCountdown();
+  setInterval(loadMarketStatus, 60_000);
+  document.addEventListener("click", function(e) {
+    const wrap = document.querySelector(".wishlist-input-wrap");
+    const sugg = document.getElementById("search-suggestions");
+    if (sugg && wrap && !wrap.contains(e.target)) sugg.classList.add("d-none");
+  });
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+function doLogin() {
+  const email    = (document.getElementById("login-email").value || "").trim();
+  const password = document.getElementById("login-password").value || "";
+  if (!email || !password) return showAuthError("Please enter your email and password.");
+  _setAuthBtnLoading("login-btn", true);
+
+  const authDetails  = new AmazonCognitoIdentity.AuthenticationDetails({ Username: email, Password: password });
+  const cognitoUser  = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: _userPool });
+
+  cognitoUser.authenticateUser(authDetails, {
+    onSuccess: ()    => onAuthSuccess(cognitoUser),
+    onFailure: (err) => { _setAuthBtnLoading("login-btn", false); showAuthError(err.message); },
+  });
+}
+
+// ── Signup ────────────────────────────────────────────────────────────────────
+function doSignup() {
+  const email    = (document.getElementById("signup-email").value || "").trim();
+  const password = document.getElementById("signup-password").value || "";
+  const confirm  = document.getElementById("signup-confirm").value  || "";
+
+  if (!email || !password) return showAuthError("Please fill in all fields.");
+  if (password !== confirm) return showAuthError("Passwords do not match.");
+  if (password.length < 8)  return showAuthError("Password must be at least 8 characters.");
+  _setAuthBtnLoading("signup-btn", true);
+
+  const emailAttr = new AmazonCognitoIdentity.CognitoUserAttribute({ Name: "email", Value: email });
+
+  _userPool.signUp(email, password, [emailAttr], null, (err) => {
+    _setAuthBtnLoading("signup-btn", false);
+    if (err) return showAuthError(err.message);
+    _pendingEmail = email;
+    showAuthForm("form-confirm");
+    document.getElementById("confirm-email-display").textContent = email;
+  });
+}
+
+// ── Confirm email ─────────────────────────────────────────────────────────────
+function doConfirm() {
+  const code = (document.getElementById("confirm-code").value || "").trim();
+  if (!code) return showAuthError("Please enter the verification code.");
+  _setAuthBtnLoading("confirm-btn", true);
+
+  const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: _pendingEmail, Pool: _userPool });
+  cognitoUser.confirmRegistration(code, true, (err) => {
+    _setAuthBtnLoading("confirm-btn", false);
+    if (err) return showAuthError(err.message);
+    showAuthForm("form-login");
+    showAuthSuccess("Account confirmed! Please sign in.");
+  });
+}
+
+// ── Resend verification code ───────────────────────────────────────────────────
+function doResendCode() {
+  if (!_pendingEmail) return;
+  const cognitoUser = new AmazonCognitoIdentity.CognitoUser({ Username: _pendingEmail, Pool: _userPool });
+  cognitoUser.resendConfirmationCode((err) => {
+    if (err) return showAuthError(err.message);
+    showAuthSuccess("Code resent — check your inbox.");
+  });
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+function doLogout() {
+  if (_cognitoUser) _cognitoUser.signOut();
+  _cognitoUser = null;
+  showAuthUI();
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allStocks          = [];
 let activeFilter       = "ALL";
@@ -15,30 +182,26 @@ let wishlistSymbols    = new Set();
 let currentModalSymbol = null;
 let currentTab         = "intraday";
 let countdownTimer     = null;
-let countdownSecs      = 900;
+let countdownSecs      = 300;
 let knownStocks        = [];
 let currentPage        = 1;
 const STOCKS_PER_PAGE  = 20;
 let backgroundLoadDone = false;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init — gate on Cognito session ────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  loadMarketStatus();
-  loadStocks(false);
-  loadNews();
-  loadWishlistCount();
-  loadKnownStocks();
-  startCountdown();
-  setInterval(loadMarketStatus, 60_000);
-
-  // Close autocomplete dropdown when clicking outside the input wrapper
-  document.addEventListener("click", function(e) {
-    const wrap = document.querySelector(".wishlist-input-wrap");
-    const sugg = document.getElementById("search-suggestions");
-    if (sugg && wrap && !wrap.contains(e.target)) {
-      sugg.classList.add("d-none");
-    }
-  });
+  const user = _userPool.getCurrentUser();
+  if (user) {
+    user.getSession((err, session) => {
+      if (!err && session && session.isValid()) {
+        onAuthSuccess(user);
+      } else {
+        showAuthUI();
+      }
+    });
+  } else {
+    showAuthUI();
+  }
 });
 
 // ── Tab switching ─────────────────────────────────────────────────────────────

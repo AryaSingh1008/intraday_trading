@@ -66,3 +66,13 @@ output "lambda_layer_status" {
   description = "Lambda layer deployment status"
   value       = var.lambda_layers_built ? "✅ Layers deployed" : "⚠️ Run build_layers.sh then set lambda_layers_built=true"
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID — paste into app.js COGNITO_USER_POOL_ID"
+  value       = aws_cognito_user_pool.main.id
+}
+
+output "cognito_client_id" {
+  description = "Cognito App Client ID — paste into app.js COGNITO_CLIENT_ID"
+  value       = aws_cognito_user_pool_client.web.id
+}

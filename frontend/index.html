@@ -12,9 +12,104 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="/css/style.css?v=14"/>
+  <link rel="stylesheet" href="/css/style.css?v=15"/>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════════════ AUTH SCREEN ══ -->
+<div id="auth-container" class="auth-container">
+  <div class="auth-card">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="logo-circle" style="margin:0 auto 0.75rem;font-size:2rem;width:56px;height:56px;background:rgba(26,35,126,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;">📈</div>
+      <h2>AI Trading Assistant</h2>
+      <p class="text-muted small mb-0">Indian Market Signals &amp; Analysis</p>
+    </div>
+
+    <!-- Shared error banner -->
+    <div id="auth-error" class="alert alert-danger py-2 d-none mt-3 mb-0"></div>
+    <!-- Shared success banner -->
+    <div id="auth-success" class="alert alert-success py-2 d-none mt-3 mb-0"></div>
+
+    <!-- ── Login form ── -->
+    <div id="form-login" class="mt-3">
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="login-email">Email</label>
+        <input type="email" id="login-email" class="form-control"
+               placeholder="you@example.com" autocomplete="email"
+               onkeydown="if(event.key==='Enter')doLogin()"/>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="login-password">Password</label>
+        <input type="password" id="login-password" class="form-control"
+               placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')doLogin()"/>
+      </div>
+      <button id="login-btn" class="btn btn-primary w-100 py-2 fw-semibold" onclick="doLogin()">
+        Sign In
+      </button>
+      <p class="text-center mt-3 mb-0 small text-muted">
+        No account yet?
+        <a href="#" class="fw-semibold" onclick="showAuthForm('form-signup');return false;">Create one</a>
+      </p>
+    </div>
+
+    <!-- ── Signup form ── -->
+    <div id="form-signup" class="d-none mt-3">
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="signup-email">Email</label>
+        <input type="email" id="signup-email" class="form-control"
+               placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="signup-password">Password</label>
+        <input type="password" id="signup-password" class="form-control"
+               placeholder="Min 8 chars, upper, lower, number" autocomplete="new-password"/>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="signup-confirm">Confirm Password</label>
+        <input type="password" id="signup-confirm" class="form-control"
+               placeholder="Repeat password" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter')doSignup()"/>
+      </div>
+      <button id="signup-btn" class="btn btn-primary w-100 py-2 fw-semibold" onclick="doSignup()">
+        Create Account
+      </button>
+      <p class="text-center mt-3 mb-0 small text-muted">
+        Already have an account?
+        <a href="#" class="fw-semibold" onclick="showAuthForm('form-login');return false;">Sign in</a>
+      </p>
+    </div>
+
+    <!-- ── Confirm email form ── -->
+    <div id="form-confirm" class="d-none mt-3">
+      <p class="text-muted small mb-3">
+        <i class="bi bi-envelope-check me-1"></i>
+        We sent a 6-digit code to <strong id="confirm-email-display"></strong>.
+        Check your inbox (and spam folder).
+      </p>
+      <div class="mb-3">
+        <label class="form-label fw-semibold" for="confirm-code">Verification Code</label>
+        <input type="text" id="confirm-code" class="form-control text-center fw-bold fs-5"
+               placeholder="123456" maxlength="6" autocomplete="one-time-code"
+               onkeydown="if(event.key==='Enter')doConfirm()"/>
+      </div>
+      <button id="confirm-btn" class="btn btn-success w-100 py-2 fw-semibold" onclick="doConfirm()">
+        Confirm &amp; Sign In
+      </button>
+      <p class="text-center mt-3 mb-0 small text-muted">
+        <a href="#" onclick="showAuthForm('form-signup');return false;">← Back</a>
+        &nbsp;·&nbsp;
+        <a href="#" onclick="doResendCode();return false;">Resend code</a>
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ APP (shown after login) ══ -->
+<div id="app-container" style="display:none">
 
 <!-- ══════════════════════════════════════════════ HEADER ══ -->
 <header class="app-header">
@@ -41,7 +136,7 @@
 
       <!-- Controls -->
       <div class="col-lg-4 col-md-12 mt-2 mt-lg-0">
-        <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+        <div class="d-flex flex-wrap gap-2 justify-content-lg-end align-items-center">
           <!-- Refresh button -->
           <button class="btn-action btn-refresh" onclick="refreshCurrentTab()" id="refresh-btn">
             <i class="bi bi-arrow-clockwise"></i> Refresh
@@ -50,6 +145,14 @@
           <button class="btn-action btn-excel" onclick="exportExcel()">
             <i class="bi bi-file-earmark-excel-fill"></i> Export Excel
           </button>
+          <!-- Logged-in user + logout -->
+          <div id="user-info" class="d-flex align-items-center gap-2 text-white">
+            <i class="bi bi-person-circle fs-5"></i>
+            <span id="user-email-display" class="small"></span>
+            <button class="btn btn-sm btn-outline-light" onclick="doLogout()">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -576,6 +679,11 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/app.js?v=16"></script>
+
+</div><!-- /app-container -->
+
+<!-- Cognito SDK — must load before app.js -->
+<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js" crossorigin="anonymous"></script>
+<script src="/js/app.js?v=17"></script>
 </body>
 </html>
