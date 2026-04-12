@@ -128,3 +128,18 @@ jobs:
       - name: Terraform Apply
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Force-deploy Lambda code (bypass Terraform hash drift)
+        run: |
+          for dir in lambdas/trading_*/; do
+            name=$(basename "$dir")
+            fn_name="${name//_/-}"
+            zip_file="/tmp/${name}.zip"
+            cd "$dir" && zip -r "$zip_file" . --exclude "__pycache__/*" "*.pyc" ".DS_Store" && cd -
+            aws lambda update-function-code \
+              --function-name "$fn_name" \
+              --region us-east-1 \
+              --zip-file "fileb://${zip_file}" \
+              --no-cli-pager
+            echo "Deployed $fn_name"
+          done
