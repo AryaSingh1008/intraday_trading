@@ -86,10 +86,18 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - One-click Excel export with full analysis for all 80 stocks
 - Styled XLSX: signal-based background colors, formatted headers, title + disclaimer
 
+### 🔐 Authentication (AWS Cognito)
+- Login / Sign-up screen before the dashboard is accessible — no one can view data without an account
+- Email + password sign-up with email verification (6-digit code)
+- Persistent sessions using Cognito ID tokens (1-hour access token, 30-day refresh token — auto-renewed)
+- Per-user wishlist and portfolio — every account sees only its own data
+- Logout button in the header clears the session instantly
+- All API routes protected by a JWT authorizer on API Gateway — unauthenticated requests get `401`
+
 ### 🕐 Market Status & Auto-Refresh
 - IST market hours indicator (9:15 AM – 3:30 PM, weekdays)
-- 15-minute auto-refresh countdown with progress bar
-- EventBridge warmup pre-caches data — most requests return in **< 1 second**
+- 5-minute auto-refresh countdown with progress bar
+- Every refresh fetches **live data directly** — no stale cache, prices always reflect current market
 
 ---
 
@@ -102,33 +110,30 @@ User opens website
 CloudFront serves static files from nearest edge (< 50ms)
       │
       ↓
-Frontend requests first 20 stocks → API Gateway → Lambda
+Login screen — Cognito authenticates user, issues ID token
+      │
+      ↓
+Frontend requests first 20 stocks → API Gateway (JWT authorizer validates token)
       │                                              │
-      │                                    Checks DynamoDB cache
-      │                                    (15-min TTL)
-      │                                              │
-      │                              Cache HIT → return instantly
-      │                              Cache MISS → batch fetch from yfinance
+      │                                    Batch fetch live prices from yfinance
       │                                              │
       │                                    Run 12 technical indicators
       │                                    + sentiment analysis + AI validation
       │                                              │
-      │                                    Cache results in DynamoDB
-      │                                              │
       ↓                                              ↓
-Page 1 renders immediately          Background: fetch remaining stocks
+Page 1 renders (~5–15s)             Background: fetch remaining stocks
       │                              (pages 2–4 load silently)
       ↓
 User browses, clicks stock → modal with intraday chart + full analysis
-      │
+      │                       (all prices are live — no stale cache)
       ↓
 User asks AI → Bedrock Agent calls 3 tools → returns reasoned analysis
 ```
 
-**EventBridge Schedules (3 automated jobs):**
-- **Every 5 min** (market hours): Pre-cache all 80 stock signals → < 1s user response
-- **Every 2 min**: Refresh options chain data (keeps cache hot)
+**EventBridge Schedules (1 automated job remaining):**
 - **Daily 3:40 PM IST**: Snapshot ATM IV for 30-day rolling percentile history
+
+> **Note:** Stock signal warmup and options cache warmup schedules were removed. All analysis now fetches live data on every request so prices and recommendations always reflect the current market.
 
 ---
 
@@ -145,8 +150,14 @@ User asks AI → Bedrock Agent calls 3 tools → returns reasoned analysis
                        │ HTTPS
                        ▼
 ┌──────────────────────────────────────────────────────────────────┐
+│              AWS Cognito User Pool                                 │
+│     Email/password auth │ JWT ID tokens │ 30-day refresh          │
+└──────────────────────┬───────────────────────────────────────────┘
+                       │ ID Token (JWT)
+                       ▼
+┌──────────────────────────────────────────────────────────────────┐
 │                    API Gateway (HTTP v2)                           │
-│              15 Routes │ 29s timeout │ CORS enabled               │
+│      16 Routes │ JWT Authorizer │ 29s timeout │ CORS enabled       │
 └──────┬───────┬────────┬────────┬────────┬────────┬──────────────┘
        │       │        │        │        │        │
        ▼       ▼        ▼        ▼        ▼        ▼
@@ -165,17 +176,20 @@ User asks AI → Bedrock Agent calls 3 tools → returns reasoned analysis
   └────────────────┴──────────────┴───────────┴──────────┘
        │                                          │
        ▼                                          ▼
-  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-  │DynamoDB  │  │DynamoDB  │  │DynamoDB  │  │DynamoDB  │
-  │Cache     │  │Wishlist  │  │Portfolio │  │IV History│
-  │(15m TTL) │  │(PITR)    │  │(PITR)    │  │(31d TTL) │
-  └──────────┘  └──────────┘  └──────────┘  └──────────┘
+  ┌──────────┐  ┌──────────┐  ┌──────────┐
+  │DynamoDB  │  │DynamoDB  │  │DynamoDB  │
+  │Wishlist  │  │Portfolio │  │IV History│
+  │(PITR)    │  │(PITR)    │  │(31d TTL) │
+  └──────────┘  └──────────┘  └──────────┘
+       │             │
+       └──── user_id = Cognito sub (per-user data isolation)
        │
        ▼
   ┌──────────────────────────────────────────────────────┐
   │     External Data Sources (ALL FREE)                  │
   │  Yahoo Finance  │  NSE Public API  │  6 RSS Feeds    │
   │  (prices, OHLCV)│  (options chain) │  (news headlines)│
+  │  fetched LIVE on every request — no caching          │
   └──────────────────────────────────────────────────────┘
        │
        ▼
@@ -189,10 +203,9 @@ User asks AI → Bedrock Agent calls 3 tools → returns reasoned analysis
        │
        ▼
   ┌──────────────────────────────────────────────────────┐
-  │     EventBridge Scheduler (3 Automated Jobs)          │
-  │  Every 5m : Warmup stock signals (market hours only) │
-  │  Every 2m : Refresh options chain cache              │
-  │  Daily 3:40PM : Snapshot IV for 30-day percentile    │
+  │     EventBridge Scheduler (1 Automated Job)           │
+  │  Daily 3:40PM IST : Snapshot IV for 30-day percentile│
+  │  (warmup schedules removed — all data is live)       │
   └──────────────────────────────────────────────────────┘
        │
        ▼
@@ -298,7 +311,7 @@ User: "Should I buy RELIANCE today?"
 | `trading_bedrock_sentiment_tool` | Tool: news sentiment analysis | 20s | backend, nlp |
 | `trading_bedrock_options_tool` | Tool: options chain analysis | 15s | backend, heavy |
 | `trading_options_analysis` | Options chain API endpoint | 30s | backend, heavy |
-| `trading_options_refresh` | EventBridge warmup + IV history | 30s | backend, heavy |
+| `trading_options_refresh` | Daily IV history snapshot (market close) | 30s | backend, heavy |
 | `trading_news_sentiment` | News aggregation endpoint | 20s | backend, nlp |
 | `trading_wishlist` | Wishlist CRUD operations | 10s | backend |
 | `trading_portfolio` | Holdings P&L tracker | 10s | backend |
@@ -306,14 +319,15 @@ User: "Should I buy RELIANCE today?"
 | `trading_excel_export` | XLSX generation + pre-signed S3 URL | 10s | backend, export |
 | `trading_cache_clear` | Manual cache invalidation | 5s | backend |
 
-### DynamoDB Tables (4)
+### DynamoDB Tables (3)
 
 | Table | PK | SK | TTL | Purpose |
 |-------|----|----|-----|---------|
-| `trading-cache` | `cache_key` | — | 15 min | Stock signals, options chains (auto-expires) |
-| `trading-wishlist` | `user_id` | `symbol` | — | Persistent watchlist (PITR enabled) |
-| `trading-portfolio` | `user_id` | `holding_id` | — | Holdings with buy price/qty (PITR enabled) |
+| `trading-wishlist` | `user_id` (Cognito sub) | `symbol` | — | Per-user watchlist (PITR enabled) |
+| `trading-portfolio` | `user_id` (Cognito sub) | `holding_id` | — | Per-user holdings with buy price/qty (PITR enabled) |
 | `trading-iv-history` | `symbol` | `date` | 31 days | 30-day rolling IV percentile snapshots |
+
+> The `trading-cache` table (previously used for 15-min stock signal caching) is no longer written to for stock analysis. All signals are computed fresh on every request.
 
 ### Data Sources (All Free)
 
@@ -334,15 +348,15 @@ User: "Should I buy RELIANCE today?"
 | Layer | Technology | Why This Choice |
 |-------|-----------|-----------------|
 | **Frontend** | HTML5 + Bootstrap 5 + Chart.js (vanilla JS) | No framework overhead — loads in <3s on mobile, zero build step |
+| **Auth** | AWS Cognito + amazon-cognito-identity-js | Managed auth — email verification, JWT tokens, auto-refresh, per-user data |
 | **Backend** | 13 Lambda functions (Python 3.12) | Serverless — ₹0 when market closed. Python for pandas/numpy/ta ecosystem |
 | **Database** | DynamoDB (PAY_PER_REQUEST) | Zero admin, free tier (25 RCU/WCU), auto-scales |
 | **AI** | Claude Haiku 3.5 + Nova Micro (Bedrock) | Haiku: fast (1-2s), cheap ($0.25/1M tokens). Nova: headlines only ($0.035/1M) |
-| **API** | API Gateway HTTP v2 (15 routes) | Low latency, 29s timeout, native Lambda integration |
+| **API** | API Gateway HTTP v2 (16 routes + JWT authorizer) | Low latency, 29s timeout, native Cognito JWT validation |
 | **CDN** | CloudFront (Mumbai edge) | HTTP/2+3, caching, S3 origin access identity |
-| **Data** | yfinance, NSE API, 6 RSS feeds | 100% free — no paid APIs |
+| **Data** | yfinance, NSE API, 6 RSS feeds — fetched live | 100% free, always-fresh — no caching layer for stock signals |
 | **IaC** | Terraform (10+ modules) | Reproducible, state management, multi-resource orchestration |
-| **Caching** | DynamoDB (15-min TTL) + EventBridge warmup | Pre-cached responses → <1s latency during market hours |
-| **Scheduling** | EventBridge Scheduler (3 jobs) | Market-hours-only warmup → zero cost overnight |
+| **Scheduling** | EventBridge Scheduler (1 job) | Daily IV history snapshot only — no warmup needed without cache |
 | **NLP** | VADER + 100+ finance lexicon + regex patterns | Free, fast, no API call needed for base sentiment |
 | **Prompts** | YAML templates + Jinja2 (prompt_loader.py) | Versioned, testable, separated from code |
 
@@ -477,7 +491,8 @@ intraday_trading/
     │   ├── main.tf                     ← Terraform config & AWS provider
     │   ├── variables.tf                ← Input vars (region, account, model IDs)
     │   ├── locals.tf                   ← Computed locals (table names, prefixes)
-    │   ├── api_gateway.tf              ← HTTP API v2 (15 routes, 29s timeout)
+    │   ├── api_gateway.tf              ← HTTP API v2 (16 routes + Cognito JWT authorizer)
+    │   ├── cognito.tf                  ← Cognito User Pool, App Client, JWT Authorizer
     │   ├── lambda_functions.tf         ← 13 Lambda function definitions + layers
     │   ├── lambda_layers.tf            ← Layer archiving (pandas, numpy, ta, VADER, etc.)
     │   ├── dynamodb.tf                 ← 4 tables: cache, wishlist, portfolio, iv_history
@@ -527,6 +542,9 @@ intraday_trading/
 
 ## 🔒 Security
 
+- **Cognito authentication** — every page and API route requires a valid JWT. Unauthenticated requests to `/api/*` return `401`
+- **Per-user data isolation** — wishlist and portfolio use the Cognito `sub` (UUID) as the DynamoDB partition key, not a shared ID
+- **JWT auto-refresh** — Cognito refresh tokens (30-day) silently renew access tokens; users stay logged in without re-entering credentials
 - **CloudFront-only** entry point (S3 bucket private, Origin Access Identity)
 - **IAM least-privilege** — each Lambda gets only the permissions it needs
 - **DynamoDB**: Lambda-only access (no public endpoints)
@@ -568,17 +586,36 @@ cd ../terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your AWS account ID
 
-# 3. Deploy
+# 3. Deploy infrastructure (creates Cognito User Pool + JWT authorizer)
 terraform init
 terraform plan
 terraform apply
 
-# 4. Upload frontend to S3
-aws s3 sync ../../frontend/ s3://<your-spa-bucket>/ --delete
+# 4. Copy Cognito IDs into app.js (lines 11-12)
+terraform output cognito_user_pool_id   # → COGNITO_USER_POOL_ID in app.js
+terraform output cognito_client_id      # → COGNITO_CLIENT_ID in app.js
 
-# 5. Invalidate CloudFront cache
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
+# 5. Upload frontend to S3
+BUCKET=$(terraform output -raw frontend_bucket)
+DIST=$(terraform output -raw cloudfront_distribution_id)
+
+aws s3 sync ../../frontend/ s3://$BUCKET/ --delete \
+  --cache-control "public,max-age=31536000,immutable" --exclude "index.html"
+aws s3 cp ../../frontend/index.html s3://$BUCKET/index.html \
+  --cache-control "no-cache,no-store,must-revalidate"
+
+# 6. Invalidate CloudFront cache
+aws cloudfront create-invalidation --distribution-id $DIST --paths "/*"
 ```
+
+> **First-time Cognito deploy:** If your CI/CD role (`github-actions-trading`) was created before Cognito was added, you need to grant it Cognito permissions once manually before Terraform can run:
+> ```bash
+> aws iam put-role-policy \
+>   --role-name github-actions-trading \
+>   --policy-name trading-cognito-access \
+>   --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["cognito-idp:*"],"Resource":"*"}]}'
+> ```
+> After the first `terraform apply`, Terraform manages this policy automatically.
 
 ---
 
@@ -587,7 +624,10 @@ aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 - 🔔 **Push Notifications** — Alert when a watchlist stock flips to STRONG BUY/SELL
 - 📱 **PWA** — Install on phone like a native app
 - 🧪 **Backtesting Engine** — "Would this signal have worked 6 months ago?"
-- 👥 **Multi-user Auth** — Cognito login for multiple family members
-- 🔄 **CI/CD Pipeline** — GitHub Actions → auto-deploy on push
 - 🧠 **Fine-tuned Sentiment** — Custom model trained on Indian financial news
 - 📊 **Performance Dashboard** — Signal accuracy tracking over time
+
+**Recently Shipped:**
+- ✅ **Live Data** — Removed 15-min DynamoDB cache; all signals now computed fresh on every request so buy/sell targets always match current price
+- ✅ **Cognito Authentication** — Email/password login with per-user wishlist and portfolio isolation
+- ✅ **CI/CD Pipeline** — GitHub Actions deploys infrastructure and frontend on push to `main`

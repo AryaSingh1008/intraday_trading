@@ -1,41 +1,4 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# IAM: Grant the GitHub Actions OIDC role permission to manage Cognito
-# The github-actions-trading role was created before Cognito was added to this
-# project, so cognito-idp permissions were not in its original policy.
-# NOTE: Run the manual CLI command in the README first (chicken-and-egg),
-#       then Terraform will own this policy going forward.
-# ─────────────────────────────────────────────────────────────────────────────
-
-data "aws_iam_role" "github_actions" {
-  name = "github-actions-trading"
-}
-
-data "aws_iam_policy_document" "github_actions_cognito" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "cognito-idp:CreateUserPool",
-      "cognito-idp:DeleteUserPool",
-      "cognito-idp:DescribeUserPool",
-      "cognito-idp:UpdateUserPool",
-      "cognito-idp:CreateUserPoolClient",
-      "cognito-idp:DeleteUserPoolClient",
-      "cognito-idp:DescribeUserPoolClient",
-      "cognito-idp:UpdateUserPoolClient",
-      "cognito-idp:ListUserPools",
-      "cognito-idp:ListUserPoolClients",
-    ]
-    resources = ["*"]
-  }
-}
-
-resource "aws_iam_role_policy" "github_actions_cognito" {
-  name   = "${local.prefix}-github-actions-cognito"
-  role   = data.aws_iam_role.github_actions.id
-  policy = data.aws_iam_policy_document.github_actions_cognito.json
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Cognito User Pool — email/password auth with open signup
 # ─────────────────────────────────────────────────────────────────────────────
 
