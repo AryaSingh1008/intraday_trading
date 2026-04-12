@@ -315,11 +315,13 @@ class TechnicalAgent:
                 )
 
                 if near_support:
-                    nearest = s1 if (s1 and abs(current_price - s1) < abs(current_price - (s2 or s1))) else s2
+                    candidates = [x for x in [s1, s2] if x is not None]
+                    nearest = min(candidates, key=lambda x: abs(current_price - x))
                     score += 5
                     reasons.append(f"Price near pivot support ₹{nearest:.0f} — potential bounce zone")
                 elif near_resistance:
-                    nearest = r1 if (r1 and abs(current_price - r1) < abs(current_price - (r2 or r1))) else r2
+                    candidates = [x for x in [r1, r2] if x is not None]
+                    nearest = min(candidates, key=lambda x: abs(current_price - x))
                     score -= 5
                     reasons.append(f"Price near pivot resistance ₹{nearest:.0f} — potential rejection zone")
 

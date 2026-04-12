@@ -88,8 +88,12 @@ class SignalAgent:
                 try:
                     stock_return = float(hist["Close"].iloc[-1])      / float(hist["Close"].iloc[-30])      - 1
                     nifty_return = float(nifty_hist.iloc[-1].iloc[0] if hasattr(nifty_hist.iloc[-1], 'iloc') else nifty_hist.iloc[-1]) / float(nifty_hist.iloc[-30].iloc[0] if hasattr(nifty_hist.iloc[-30], 'iloc') else nifty_hist.iloc[-30]) - 1
-                    if nifty_return != 0:
-                        rs_ratio = round(stock_return / nifty_return, 2)
+                    # Use (1+stock) / (1+nifty) — correct RS formula in all market directions.
+                    # Simple return ratio (stock/nifty) inverts when nifty is negative,
+                    # wrongly penalising stocks that fell less than the market.
+                    denom = 1 + nifty_return
+                    if denom != 0:
+                        rs_ratio = round((1 + stock_return) / denom, 2)
                         if rs_ratio > 1.2:
                             final_score = min(100, final_score + 5)
                         elif rs_ratio < 0.8:
@@ -126,20 +130,26 @@ class SignalAgent:
 
                 if signal == "STRONG BUY":
                     raw_target = current_price + 2.5 * _atr
-                    target_price = round(min(filter(None, [_bb_upper, pivot_r1, raw_target])), 2)
-                    raw_stop     = current_price - 1.5 * _atr
-                    stop_loss    = round(max(filter(None, [_bb_lower, pivot_s1, raw_stop])), 2)
+                    raw_stop   = current_price - 1.5 * _atr
+                    _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
+                    _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
+                    target_price = round(_t if _t > current_price else raw_target, 2)
+                    stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "BUY":
                     raw_target = current_price + 1.5 * _atr
-                    target_price = round(min(filter(None, [_bb_upper, pivot_r1, raw_target])), 2)
-                    raw_stop     = current_price - 1.0 * _atr
-                    stop_loss    = round(max(filter(None, [_bb_lower, pivot_s1, raw_stop])), 2)
+                    raw_stop   = current_price - 1.0 * _atr
+                    _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
+                    _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
+                    target_price = round(_t if _t > current_price else raw_target, 2)
+                    stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "SELL":
                     raw_target = current_price - 1.5 * _atr
-                    target_buy_price = round(max(filter(None, [_bb_lower, pivot_s1, raw_target])), 2)
+                    _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
+                    target_buy_price = round(_t if _t < current_price else raw_target, 2)
                 elif signal == "STRONG SELL":
                     raw_target = current_price - 2.5 * _atr
-                    target_buy_price = round(max(filter(None, [_bb_lower, pivot_s1, raw_target])), 2)
+                    _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
+                    target_buy_price = round(_t if _t < current_price else raw_target, 2)
 
             # ── Position sizing (2% risk rule, Rs 1 lakh default portfolio) ────
             suggested_qty = None
