@@ -132,6 +132,25 @@ body {
   margin-top: 2px;
 }
 
+.header-center-line {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+}
+
+.disclaimer-bar {
+  background: rgba(255, 193, 7, 0.12);
+  border-bottom: 1px solid rgba(255, 193, 7, 0.25);
+  color: rgba(180, 140, 0, 0.9);
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 5px 16px;
+  letter-spacing: 0.2px;
+}
+
 .app-subtitle {
   font-size: 0.85rem;
   color: rgba(255,255,255,.75);
