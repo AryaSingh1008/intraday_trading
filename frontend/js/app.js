@@ -1341,6 +1341,7 @@ function startCountdown() {
       countdownSecs = 300;
       loadStocks(true);
       loadNews();
+      loadIndexData();
     }
   }, 1000);
 }
