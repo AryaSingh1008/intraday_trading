@@ -89,10 +89,11 @@ function onAuthSuccess(user) {
   document.getElementById("app-container").style.display  = "";
   // Boot the app
 
-  // Activate BUY filter button visually (default filter is BUY)
+  // Default: show ALL signals so sector filters always have results
+  activeFilter = "ALL";
   document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
-  const buyBtn = document.querySelector(".btn-filter.buy");
-  if (buyBtn) buyBtn.classList.add("active");
+  const allBtn = document.querySelector(".btn-filter.all");
+  if (allBtn) allBtn.classList.add("active");
 
   _loadSignalSnapshot();   // load previous signals before first render
   loadStocks(false);
@@ -180,7 +181,7 @@ function doLogout() {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let allStocks          = [];
-let activeFilter       = "BUY";
+let activeFilter       = "ALL";
 let activeSector       = "ALL";
 let modalChart         = null;
 let currentModalData   = null;   // stores last-loaded stock detail for chart TF switching
@@ -485,6 +486,14 @@ function sortStocks(by, btn) {
   renderStocks();
 }
 
+// Sector-only filter (ignores signal filter) — used for the empty-state hint
+function _applySortAndFilterSectorOnly(stocks) {
+  if (activeSector === "ALL") return stocks.slice();
+  return stocks.filter(function(s) {
+    return !s.unavailable && (s.sector || "Others") === activeSector;
+  });
+}
+
 function _applySortAndFilter(stocks) {
   let filtered = stocks.slice();
 
@@ -537,7 +546,35 @@ function renderStocks() {
   const filtered = _applySortAndFilter(allStocks);
 
   if (!filtered.length) {
-    grid.innerHTML = '<div class="col-12 text-center text-muted py-4">No stocks match this filter.</div>';
+    // Build a helpful empty-state message explaining which filters are blocking
+    const sigLabel    = activeFilter !== "ALL" ? activeFilter : null;
+    const sectorLabel = activeSector !== "ALL" ? activeSector : null;
+
+    let hint = "";
+    if (sigLabel && sectorLabel) {
+      // Both filters active — most common cause of empty sectors
+      const allInSector = _applySortAndFilterSectorOnly(allStocks);
+      hint = '<p class="mb-2">No <strong>' + sigLabel + '</strong> signals in <strong>'
+        + sectorLabel + '</strong> sector right now'
+        + (allInSector.length ? ' — but there are <strong>' + allInSector.length + ' stocks</strong> with other signals.' : '.')
+        + '</p>'
+        + '<button class="btn btn-sm btn-outline-primary me-2" onclick="filterStocks(\'ALL\', document.querySelector(\'.btn-filter.all\'))">'
+        + 'Show All Signals in ' + sectorLabel + '</button>'
+        + '<button class="btn btn-sm btn-outline-secondary" onclick="filterSector(\'ALL\', document.querySelector(\'.btn-filter-sector.active\'))">'
+        + 'Show All Sectors</button>';
+    } else if (sigLabel) {
+      hint = '<p class="mb-2">No stocks with <strong>' + sigLabel + '</strong> signal match the current sector.</p>'
+        + '<button class="btn btn-sm btn-outline-primary" onclick="filterStocks(\'ALL\', null)">Show All Signals</button>';
+    } else if (sectorLabel) {
+      hint = '<p class="mb-2">No stocks in <strong>' + sectorLabel + '</strong> sector loaded yet.</p>';
+    } else {
+      hint = '<p class="mb-2">No stocks loaded yet.</p>';
+    }
+
+    grid.innerHTML = '<div class="col-12 text-center py-5">'
+      + '<div style="font-size:2.5rem;margin-bottom:12px;">🔍</div>'
+      + hint
+      + '</div>';
     renderPagination(0);
     return;
   }
@@ -799,6 +836,16 @@ function filterSector(sector, btn) {
   currentPage = 1;
   document.querySelectorAll(".btn-filter-sector").forEach(function(b) { b.classList.remove("active"); });
   if (btn) btn.classList.add("active");
+
+  // Auto-reset signal filter to ALL when a specific sector is chosen —
+  // prevents the confusing "Banking + BUY = 0 results" blank screen
+  if (sector !== "ALL" && activeFilter !== "ALL") {
+    activeFilter = "ALL";
+    document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
+    const allBtn = document.querySelector(".btn-filter.all");
+    if (allBtn) allBtn.classList.add("active");
+  }
+
   renderStocks();
 }
 

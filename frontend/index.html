@@ -291,8 +291,8 @@
         </h2>
         <!-- Signal filter bar -->
         <div class="filter-bar" id="filter-bar">
-          <button class="btn-filter active" onclick="filterStocks('ALL', this)">All</button>
-          <button class="btn-filter buy"    onclick="filterStocks('BUY', this)">🟢 Buy</button>
+          <button class="btn-filter all active" onclick="filterStocks('ALL', this)">All</button>
+          <button class="btn-filter buy"       onclick="filterStocks('BUY', this)">🟢 Buy</button>
           <button class="btn-filter hold"   onclick="filterStocks('HOLD', this)">🟡 Hold</button>
           <button class="btn-filter sell"   onclick="filterStocks('SELL', this)">🔴 Sell</button>
         </div>
@@ -732,6 +732,6 @@
 
 <!-- Cognito SDK — must load before app.js -->
 <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js" crossorigin="anonymous"></script>
-<script src="/js/app.js?v=21"></script>
+<script src="/js/app.js?v=22"></script>
 </body>
 </html>
