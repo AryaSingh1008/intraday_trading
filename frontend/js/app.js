@@ -7,8 +7,8 @@
 
 // ── Cognito Auth Config ───────────────────────────────────────────────────────
 // Fill these in after running: terraform output cognito_user_pool_id / cognito_client_id
-const COGNITO_USER_POOL_ID = "REPLACE_WITH_USER_POOL_ID";   // e.g. us-east-1_AbCdEfGhI
-const COGNITO_CLIENT_ID    = "REPLACE_WITH_CLIENT_ID";       // e.g. 1a2b3c4d5e6f7g8h9i0j
+const COGNITO_USER_POOL_ID = "us-east-1_N9lSioH0J";
+const COGNITO_CLIENT_ID    = "41go0jefn91jvgg2hsitbu3f79";
 
 const _userPool = new AmazonCognitoIdentity.CognitoUserPool({
   UserPoolId: COGNITO_USER_POOL_ID,
