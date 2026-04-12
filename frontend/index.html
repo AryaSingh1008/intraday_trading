@@ -311,6 +311,14 @@
           <button class="btn-filter-sector" onclick="filterSector('Telecom', this)">📡 Telecom</button>
           <button class="btn-filter-sector" onclick="filterSector('Others', this)">🎯 Others</button>
         </div>
+        <!-- Sort bar -->
+        <div class="sort-bar mt-2" id="sort-bar">
+          <span class="sort-label">Sort:</span>
+          <button class="btn-sort active" onclick="sortStocks('score', this)">⭐ Score</button>
+          <button class="btn-sort" onclick="sortStocks('rr', this)">🎯 R:R</button>
+          <button class="btn-sort" onclick="sortStocks('change', this)">📈 Change%</button>
+          <button class="btn-sort" onclick="sortStocks('volume', this)">📊 Volume</button>
+        </div>
       </div>
       <div class="row g-3" id="stock-grid"></div>
       <!-- Pagination -->

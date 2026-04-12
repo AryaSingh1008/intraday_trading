@@ -116,27 +116,43 @@ class TechnicalAgent:
                     reasons.append(stoch_reason)
 
             # ── 2.  MACD (12, 26, 9) ──────────────────────────────────────────
-            macd_line, signal_line = self._macd(close)
+            macd_line, signal_line, prev_macd, prev_signal = self._macd(close)
             if macd_line is not None and signal_line is not None:
+                curr_diff = macd_line - signal_line
+                prev_diff = (prev_macd - prev_signal) if (prev_macd is not None and prev_signal is not None) else curr_diff
                 if macd_line > signal_line:
                     score += 15
-                    reasons.append("MACD crossed above signal line — upward momentum building")
+                    if curr_diff > 0 and prev_diff <= 0:
+                        reasons.append("MACD just crossed above signal line — fresh bullish crossover ✅")
+                    else:
+                        reasons.append("MACD above signal line — bullish momentum building")
                 else:
                     score -= 15
-                    reasons.append("MACD is below signal line — downward momentum")
+                    if curr_diff < 0 and prev_diff >= 0:
+                        reasons.append("MACD just crossed below signal line — fresh bearish crossover ⚠️")
+                    else:
+                        reasons.append("MACD below signal line — bearish momentum")
 
             # ── 3.  Bollinger Bands (20, 2σ) ──────────────────────────────────
+            # Volume-confirmed breakout above upper band = bullish momentum, NOT overbought.
+            # Only penalise if price drifts above band without volume (likely exhaustion).
             upper, middle, lower = self._bollinger(close, 20)
             if upper is not None:
                 band_width = upper - lower
                 if band_width > 0:
                     pos = (current_price - lower) / band_width   # 0 = at lower, 1 = at upper
+                    vol_surge = avg_volume > 0 and volume > avg_volume * 1.5
                     if current_price <= lower:
                         score += 15
                         reasons.append("Price is at/below lower Bollinger Band — at lower support")
                     elif current_price >= upper:
-                        score -= 15
-                        reasons.append("Price is at/above upper Bollinger Band — at upper resistance")
+                        if vol_surge:
+                            # High-volume breakout above band = momentum, not exhaustion
+                            score += 10
+                            reasons.append("Price broke above upper Bollinger Band with strong volume — momentum breakout 🚀")
+                        else:
+                            score -= 15
+                            reasons.append("Price is at/above upper Bollinger Band without volume — overbought, watch for reversal")
                     elif pos < 0.3:
                         score += 8
                         reasons.append("Price is near lower Bollinger Band — close to lower support")
@@ -399,12 +415,16 @@ class TechnicalAgent:
     @staticmethod
     def _macd(series: pd.Series, fast=12, slow=26, signal=9):
         if len(series) < slow + signal:
-            return None, None
-        ema_fast   = series.ewm(span=fast,   adjust=False).mean()
-        ema_slow   = series.ewm(span=slow,   adjust=False).mean()
-        macd_line  = ema_fast - ema_slow
+            return None, None, None, None
+        ema_fast    = series.ewm(span=fast,   adjust=False).mean()
+        ema_slow    = series.ewm(span=slow,   adjust=False).mean()
+        macd_line   = ema_fast - ema_slow
         signal_line = macd_line.ewm(span=signal, adjust=False).mean()
-        return float(macd_line.iloc[-1]), float(signal_line.iloc[-1])
+        # 4-day lookback for crossover detection (same window as EMA crossover)
+        prev_idx    = -4 if len(macd_line) >= 4 else -1
+        prev_macd   = float(macd_line.iloc[prev_idx])
+        prev_signal = float(signal_line.iloc[prev_idx])
+        return float(macd_line.iloc[-1]), float(signal_line.iloc[-1]), prev_macd, prev_signal
 
     @staticmethod
     def _bollinger(series: pd.Series, window=20, num_std=2):

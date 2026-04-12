@@ -222,26 +222,27 @@ def _source_authority(url: str) -> float:
 
 def _recency_weight(published_str: str) -> float:
     """
-    Returns a weight based on how recent a headline is:
-      ≤ 6 h  → 1.00   (very fresh)
-      ≤ 24 h → 0.85
-      ≤ 48 h → 0.65
-      ≤ 72 h → 0.45
-      older  → 0.30
-    Defaults to 0.70 if the date cannot be parsed.
+    Intraday-tuned recency weights — news older than 4h has minimal impact.
+    Intraday decisions need current information; yesterday's news is irrelevant.
+      ≤ 2 h  → 1.00   (breaking / very fresh)
+      ≤ 4 h  → 0.70   (same session)
+      ≤ 6 h  → 0.40   (earlier today)
+      ≤ 12 h → 0.20   (pre-market / last evening)
+      older  → 0.05   (stale — negligible influence)
+    Defaults to 0.50 if the date cannot be parsed.
     """
     try:
         pub = parsedate_to_datetime(published_str)
         if pub.tzinfo is None:
             pub = pub.replace(tzinfo=timezone.utc)
         hours_old = (datetime.now(timezone.utc) - pub).total_seconds() / 3600
-        if hours_old <= 6:   return 1.00
-        if hours_old <= 24:  return 0.85
-        if hours_old <= 48:  return 0.65
-        if hours_old <= 72:  return 0.45
-        return 0.30
+        if hours_old <= 2:   return 1.00
+        if hours_old <= 4:   return 0.70
+        if hours_old <= 6:   return 0.40
+        if hours_old <= 12:  return 0.20
+        return 0.05
     except Exception:
-        return 0.70
+        return 0.50
 
 
 def _pattern_boost(text: str) -> float:

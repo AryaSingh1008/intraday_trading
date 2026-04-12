@@ -94,6 +94,7 @@ function onAuthSuccess(user) {
   const buyBtn = document.querySelector(".btn-filter.buy");
   if (buyBtn) buyBtn.classList.add("active");
 
+  _loadSignalSnapshot();   // load previous signals before first render
   loadStocks(false);
   loadNews();
   loadWishlistCount();
@@ -189,6 +190,8 @@ let currentTab         = "intraday";
 let countdownTimer     = null;
 let countdownSecs      = 300;
 let marketIsOpen       = false;   // updated by loadIndexData(); drives refresh interval
+let activeSort         = "score"; // score | rr | change | volume
+let prevSignals        = {};      // {symbol: signal} snapshot from last load
 let knownStocks        = [];
 let currentPage        = 1;
 const STOCKS_PER_PAGE  = 20;
@@ -404,6 +407,7 @@ async function loadStocks(forceRefresh) {
 
     renderStocks();
     renderSignalStats();
+    _saveSignalSnapshot();
     renderGapScanner();
 
     hideEl("loading-section");
@@ -457,6 +461,7 @@ async function _loadRemainingStocks() {
   backgroundLoadDone = true;
   renderStocks();
   renderSignalStats();
+  _saveSignalSnapshot();
   renderGapScanner();
   _syncAllHearts();
 }
@@ -464,19 +469,35 @@ async function _loadRemainingStocks() {
 // renderSummaryCards is now handled by renderSignalStats which writes to #summary-cards
 function renderSummaryCards() { renderSignalStats(); }
 
-function renderStocks() {
-  const grid = document.getElementById("stock-grid");
-  if (!grid) return;
+// ── Sort helper ────────────────────────────────────────────────────────────
+function _rrValue(s) {
+  if (!s.target_price || !s.current_price || !s.stop_loss) return -999;
+  const reward = s.target_price - s.current_price;
+  const risk   = s.current_price - s.stop_loss;
+  return risk > 0 ? reward / risk : -999;
+}
 
-  let filtered = allStocks;
+function sortStocks(by, btn) {
+  activeSort  = by;
+  currentPage = 1;
+  document.querySelectorAll(".btn-sort").forEach(function(b) { b.classList.remove("active"); });
+  if (btn) btn.classList.add("active");
+  renderStocks();
+}
 
-  // Signal filter
+function _applySortAndFilter(stocks) {
+  let filtered = stocks.slice();
+
+  // Signal filter — "BUY" matches both BUY + STRONG BUY; "SELL" matches both SELL + STRONG SELL;
+  // exact values like "STRONG BUY" from the pill bar are matched exactly
   if (activeFilter !== "ALL") {
     filtered = filtered.filter(function(s) {
       const sig = s.signal || "HOLD";
-      if (activeFilter === "BUY")  return sig.indexOf("BUY")  >= 0;
-      if (activeFilter === "SELL") return sig.indexOf("SELL") >= 0;
-      return sig === "HOLD";
+      if (activeFilter === "BUY")        return sig.indexOf("BUY")  >= 0;
+      if (activeFilter === "SELL")       return sig.indexOf("SELL") >= 0;
+      if (activeFilter === "STRONG BUY")  return sig === "STRONG BUY";
+      if (activeFilter === "STRONG SELL") return sig === "STRONG SELL";
+      return sig === activeFilter;
     });
   }
 
@@ -487,14 +508,42 @@ function renderStocks() {
     });
   }
 
+  // Sort
+  filtered.sort(function(a, b) {
+    if (activeSort === "rr")     return _rrValue(b) - _rrValue(a);
+    if (activeSort === "change") return Math.abs(b.change_pct||0) - Math.abs(a.change_pct||0);
+    if (activeSort === "volume") return (b.volume||0) - (a.volume||0);
+    return (b.score||0) - (a.score||0); // default: score
+  });
+
+  return filtered;
+}
+
+// ── Signal snapshot (for change badge) ────────────────────────────────────
+function _saveSignalSnapshot() {
+  const snap = {};
+  allStocks.forEach(function(s) { if (s.signal && s.symbol) snap[s.symbol] = s.signal; });
+  try { localStorage.setItem("_prevSignals", JSON.stringify(snap)); } catch(e) {}
+}
+
+function _loadSignalSnapshot() {
+  try { prevSignals = JSON.parse(localStorage.getItem("_prevSignals") || "{}"); } catch(e) { prevSignals = {}; }
+}
+
+function renderStocks() {
+  const grid = document.getElementById("stock-grid");
+  if (!grid) return;
+
+  const filtered = _applySortAndFilter(allStocks);
+
   if (!filtered.length) {
     grid.innerHTML = '<div class="col-12 text-center text-muted py-4">No stocks match this filter.</div>';
     renderPagination(0);
     return;
   }
 
-  // Paginate — use server total if no filters active, otherwise use filtered count
-  const useServerTotal = (activeFilter === "ALL" && activeSector === "ALL" && totalStocksCount > 0);
+  // Paginate — use server total only when no filter/sort active
+  const useServerTotal = (activeFilter === "ALL" && activeSector === "ALL" && activeSort === "score" && totalStocksCount > 0);
   const totalPages = useServerTotal
     ? Math.ceil(totalStocksCount / STOCKS_PER_PAGE)
     : Math.ceil(filtered.length / STOCKS_PER_PAGE);
@@ -652,6 +701,18 @@ function stockCard(s, fromWishlist) {
       + '</div>';
   }
 
+  // ── Signal change badge ─────────────────────────────────────────
+  const SIG_RANK = { "STRONG BUY": 5, "BUY": 4, "HOLD": 3, "SELL": 2, "STRONG SELL": 1 };
+  let changeBadge = "";
+  const prev = prevSignals[s.symbol];
+  if (prev && prev !== s.signal) {
+    const prevR = SIG_RANK[prev] || 3, currR = SIG_RANK[s.signal] || 3;
+    if (currR > prevR)
+      changeBadge = '<span class="sig-change-badge upgraded">↑ UPGRADED</span>';
+    else
+      changeBadge = '<span class="sig-change-badge downgraded">↓ DOWNGRADED</span>';
+  }
+
   // ── Signal timestamp ────────────────────────────────────────────
   const tsHtml = s.analysed_at
     ? '<span class="signal-ts"><i class="bi bi-clock me-1"></i>as of ' + s.analysed_at + '</span>'
@@ -684,6 +745,7 @@ function stockCard(s, fromWishlist) {
     + '<div><div class="stock-name">' + (s.name||s.symbol) + '</div>'
     + '<div class="stock-symbol">' + s.symbol + ' ' + sectorBadge + '</div></div>'
     + '<span class="signal-badge ' + sig + '">' + (s.signal_emoji||"") + " " + sig + '</span>'
+    + changeBadge
     + '</div>'
     + '<div class="stock-price mb-1">₹' + fmt(s.current_price)
     + ' <span class="stock-change ' + chgCls + '">' + chgArrow + " " + Math.abs(chg).toFixed(2) + '%</span></div>'
@@ -716,6 +778,19 @@ function filterStocks(filter, btn) {
   currentPage = 1;
   document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
   if (btn) btn.classList.add("active");
+  renderStocks();
+}
+
+// Called from the compact signal pill bar (no btn reference needed)
+function applyFilter(filter) {
+  activeFilter = filter;
+  currentPage = 1;
+  // Sync .btn-filter buttons if present
+  document.querySelectorAll(".btn-filter").forEach(function(b) {
+    const bf = b.dataset.filter || b.getAttribute("onclick");
+    b.classList.remove("active");
+    if (bf && bf.indexOf("'" + filter + "'") >= 0) b.classList.add("active");
+  });
   renderStocks();
 }
 
@@ -1294,59 +1369,58 @@ function renderSignalStats() {
 
   const avgAll = valid.length ? Math.round(totalScore / valid.length) : 0;
 
-  const avgScore = function(arr) {
-    return arr.length ? Math.round(arr.reduce(function(a,b){return a+b;},0) / arr.length) : 0;
-  };
-
   const top5Buy = valid
     .filter(function(s) { return s.signal === "STRONG BUY" || s.signal === "BUY"; })
     .sort(function(a,b) { return (b.score||0) - (a.score||0); })
     .slice(0, 5);
 
   const defs = [
-    { sig: "STRONG BUY",  cls: "stat-sbuy",  color: "#1e7e34" },
-    { sig: "BUY",         cls: "stat-buy",   color: "#28a745" },
-    { sig: "HOLD",        cls: "stat-hold",  color: "#ffc107" },
-    { sig: "SELL",        cls: "stat-sell",  color: "#dc3545" },
-    { sig: "STRONG SELL", cls: "stat-ssell", color: "#a71d2a" },
+    { sig: "STRONG BUY",  emoji: "🟢", cls: "sp-sbuy"  },
+    { sig: "BUY",         emoji: "✅", cls: "sp-buy"   },
+    { sig: "HOLD",        emoji: "🟡", cls: "sp-hold"  },
+    { sig: "SELL",        emoji: "🔴", cls: "sp-sell"  },
+    { sig: "STRONG SELL", emoji: "⛔", cls: "sp-ssell" },
   ];
 
-  let html = defs.map(function(d) {
+  // Compact pill bar (single row)
+  const pillsHtml = defs.map(function(d) {
     const cnt = counts[d.sig];
-    const avg = avgScore(scores[d.sig]);
-    const pct = valid.length ? Math.round((cnt / valid.length) * 100) : 0;
-    return '<div class="col-6 col-md-4 col-lg-2">'
-      + '<div class="signal-stat-card ' + d.cls + '">'
-      + '<div class="ss-sig">' + d.sig + '</div>'
-      + '<div class="ss-count">' + cnt + '</div>'
-      + '<div class="ss-meta">Avg AI: ' + avg + ' &nbsp;·&nbsp; ' + pct + '%</div>'
-      + '<div class="ss-bar-track"><div class="ss-bar-fill" style="width:' + pct + '%;background:' + d.color + '"></div></div>'
-      + '</div></div>';
+    const label = d.sig === "STRONG BUY" ? "S.BUY" : d.sig === "STRONG SELL" ? "S.SELL" : d.sig;
+    return '<div class="sig-pill ' + d.cls + (cnt === 0 ? " sp-zero" : "") + '" '
+      + 'onclick="applyFilter(\'' + d.sig + '\')" title="Filter: ' + d.sig + '">'
+      + '<span class="sp-emoji">' + d.emoji + '</span>'
+      + '<span class="sp-label">' + label + '</span>'
+      + '<span class="sp-count">' + cnt + '</span>'
+      + '</div>';
   }).join("");
 
-  // Avg AI score card
-  html += '<div class="col-6 col-md-4 col-lg-2">'
-    + '<div class="signal-stat-card stat-avg">'
-    + '<div class="ss-sig">AVG AI SCORE</div>'
-    + '<div class="ss-count">' + avgAll + '</div>'
-    + '<div class="ss-meta">' + valid.length + ' stocks analysed</div>'
-    + '<div class="ss-bar-track"><div class="ss-bar-fill" style="width:' + avgAll + '%;background:#1a237e"></div></div>'
-    + '</div></div>';
+  // Avg score badge
+  const avgBadge = '<div class="sig-pill sp-avg" title="Average AI score across all stocks">'
+    + '<span class="sp-emoji">🤖</span>'
+    + '<span class="sp-label">AVG</span>'
+    + '<span class="sp-count">' + avgAll + '</span>'
+    + '</div>';
 
-  // Top 5 BUY picks — spans full width below
-  if (top5Buy.length) {
-    html += '<div class="col-12">'
-      + '<div class="signal-stat-card stat-top5">'
-      + '<span class="ss-top5-label">🏆 Top BUY Picks by AI Score</span>'
-      + '<div class="d-flex flex-wrap gap-2 mt-2">'
-      + top5Buy.map(function(s) {
-          return '<span class="top-pick-chip" onclick="showDetail(\'' + s.symbol + '\')">'
-            + s.symbol.replace(".NS","") + ' <strong>' + (s.score||0) + '</strong></span>';
-        }).join("")
-      + '</div></div></div>';
-  }
+  // Top picks row
+  const topsHtml = top5Buy.length
+    ? '<div class="sig-top-picks">'
+        + '<span class="stp-label">🏆 Top picks:</span>'
+        + top5Buy.map(function(s) {
+            return '<span class="top-pick-chip" onclick="showDetail(\'' + s.symbol + '\')">'
+              + s.symbol.replace(".NS","") + ' <strong>' + (s.score||0) + '</strong></span>';
+          }).join("")
+      + '</div>'
+    : "";
 
-  el.innerHTML = html;
+  el.innerHTML = '<div class="col-12">'
+    + '<div class="sig-pill-bar">'
+    + pillsHtml
+    + '<div class="sp-divider"></div>'
+    + avgBadge
+    + '<span class="sp-total">' + valid.length + ' stocks</span>'
+    + '</div>'
+    + topsHtml
+    + '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════ COUNTDOWN ════
