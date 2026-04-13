@@ -463,11 +463,14 @@ async function loadStocks(forceRefresh) {
     _saveSignalSnapshot();
     renderGapScanner();
 
-    await loadWishlistSymbols();
-    _syncAllHearts();
+    // M1: Mark pages 2-4 as stale so _loadRemainingStocks re-fetches them
+    loadedPages = { 1: true };
 
-    // Progressively refresh pages 2-4 in merge mode (force = true)
-    _loadRemainingStocks(true);
+    // C1: AWAIT all pages so the _bgRefreshInProgress guard stays true until
+    //     every page has finished merging — prevents overlapping refreshes.
+    // M2: loadWishlistSymbols() skipped here; wishlist rarely changes between
+    //     refreshes. _syncAllHearts() runs once at end of _loadRemainingStocks.
+    await _loadRemainingStocks(true);
   } catch (e) {
     console.error("Background refresh failed:", e);
     // Old data stays on screen — no error overlay needed
@@ -504,14 +507,13 @@ async function _loadRemainingStocks(forceAll) {
         newStocks.forEach(s => { if (!existingSymbols.has(s.symbol)) allStocks.push(s); });
       }
       loadedPages[pg] = true;
-
-      renderSummaryCards();
-      renderStocks();   // re-render on every page — data has updated
+      // H1: No per-page render — defer to single render after all pages complete
     } catch (e) {
       console.error("Background page " + pg + " load failed:", e);
     }
   }
 
+  // Single render pass after all pages are merged — avoids 3 intermediate DOM rebuilds
   backgroundLoadDone = true;
   renderStocks();
   renderSignalStats();
@@ -736,8 +738,11 @@ function renderPagination(totalPages) {
 async function goToPage(page) {
   currentPage = page;
 
-  // If this page hasn't been fetched yet, fetch it on demand
-  if (!loadedPages[page]) {
+  // H2: Only fetch on-demand if the page isn't loaded AND no background refresh
+  //     is already covering it. During a background refresh all pages are being
+  //     re-fetched via _loadRemainingStocks(true) — trust that data instead of
+  //     racing with a duplicate fetch that would show a spinner over live cards.
+  if (!loadedPages[page] && !_bgRefreshInProgress) {
     const grid = document.getElementById("stock-grid");
     if (grid) grid.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="text-muted mt-2">Loading page ' + page + '...</div></div>';
 
