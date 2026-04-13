@@ -197,6 +197,7 @@ let knownStocks        = [];
 let currentPage        = 1;
 const STOCKS_PER_PAGE  = 20;
 let backgroundLoadDone = false;
+let _bgRefreshInProgress = false;  // true while a background refresh is in-flight
 
 // ── Init — gate on Cognito session ────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
@@ -381,51 +382,107 @@ async function analyseCustomStock() {
 // ═══════════════════════════════════════════════════════════════ INTRADAY TAB ═
 
 async function loadStocks(forceRefresh) {
-  if (forceRefresh) {
-    await fetch("/api/cache", { method: "DELETE" });
+  const hasExistingData = allStocks.length > 0;
+
+  // ── PATH A: Initial load (no data yet) — show full spinner ──────────────
+  if (!hasExistingData) {
+    if (forceRefresh) {
+      await fetch("/api/cache", { method: "DELETE" });
+    }
+
+    showEl("loading-section");
+    hideEl("error-section");
+    hideEl("summary-row");
+    hideEl("stocks-section");
+    backgroundLoadDone = false;
+    currentPage = 1;
+
+    const btn = document.getElementById("refresh-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading\u2026'; }
+
+    try {
+      loadedPages = {};
+      const r = await fetch("/api/stocks?page=1&per_page=" + STOCKS_PER_PAGE);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+
+      allStocks = data.stocks || [];
+      totalStocksCount = data.total || allStocks.length;
+      loadedPages[1] = true;
+
+      renderStocks();
+      renderSignalStats();
+      _saveSignalSnapshot();
+      renderGapScanner();
+
+      hideEl("loading-section");
+      showEl("summary-row");
+      showEl("stocks-section");
+
+      await loadWishlistSymbols();
+      _syncAllHearts();
+
+      _loadRemainingStocks();
+    } catch (e) {
+      console.error(e);
+      hideEl("loading-section");
+      showEl("error-section");
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh'; }
+    }
+    return;
   }
 
-  showEl("loading-section");
-  hideEl("error-section");
-  hideEl("summary-row");
-  hideEl("stocks-section");
-  backgroundLoadDone = false;
-  currentPage = 1;
+  // ── PATH B: Background refresh (data already visible) ───────────────────
+  // Keep existing data on screen while fetching new data silently.
+  if (_bgRefreshInProgress) return;  // prevent overlapping refreshes
+  _bgRefreshInProgress = true;
+  _showUpdateIndicator();
 
   const btn = document.getElementById("refresh-btn");
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating\u2026'; }
 
   try {
-    // Phase 1: Fetch first page quickly
-    loadedPages = {};
+    if (forceRefresh) {
+      await fetch("/api/cache", { method: "DELETE" });
+    }
+
+    // Fetch page 1 into temporary variables — grid stays visible with old data
+    const newLoadedPages = {};
     const r = await fetch("/api/stocks?page=1&per_page=" + STOCKS_PER_PAGE);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
 
-    allStocks = data.stocks || [];
-    totalStocksCount = data.total || allStocks.length;
-    loadedPages[1] = true;
+    const newStocks = data.stocks || [];
+    const newTotal  = data.total || newStocks.length;
+    newLoadedPages[1] = true;
+
+    // Atomic swap — replace allStocks, re-render in one shot (no flicker)
+    allStocks        = newStocks;
+    totalStocksCount = newTotal;
+    loadedPages      = newLoadedPages;
+    backgroundLoadDone = false;
+
+    // Keep currentPage if still valid, else reset to 1
+    const newTotalPages = Math.ceil(totalStocksCount / STOCKS_PER_PAGE);
+    if (currentPage > newTotalPages) currentPage = 1;
 
     renderStocks();
     renderSignalStats();
     _saveSignalSnapshot();
     renderGapScanner();
 
-    hideEl("loading-section");
-    showEl("summary-row");
-    showEl("stocks-section");
-
-    // Sync wishlist hearts
     await loadWishlistSymbols();
     _syncAllHearts();
 
-    // Phase 2: Fetch all remaining stocks in background
+    // Background-load remaining pages (appends to the new allStocks)
     _loadRemainingStocks();
   } catch (e) {
-    console.error(e);
-    hideEl("loading-section");
-    showEl("error-section");
+    console.error("Background refresh failed:", e);
+    // Old data stays on screen — no error overlay needed
   } finally {
+    _bgRefreshInProgress = false;
+    _hideUpdateIndicator();
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh'; }
   }
 }
@@ -465,6 +522,25 @@ async function _loadRemainingStocks() {
   _saveSignalSnapshot();
   renderGapScanner();
   _syncAllHearts();
+}
+
+// ── Background update indicator (subtle pill in refresh bar) ─────────────
+function _showUpdateIndicator() {
+  var ind = document.getElementById("bg-update-indicator");
+  if (!ind) {
+    ind = document.createElement("div");
+    ind.id = "bg-update-indicator";
+    ind.className = "bg-update-indicator";
+    ind.innerHTML = '<div class="bg-update-spinner"></div> Updating signals\u2026';
+    var bar = document.getElementById("refresh-bar");
+    if (bar) bar.appendChild(ind);
+  }
+  ind.classList.add("show");
+}
+
+function _hideUpdateIndicator() {
+  var ind = document.getElementById("bg-update-indicator");
+  if (ind) ind.classList.remove("show");
 }
 
 // renderSummaryCards is now handled by renderSignalStats which writes to #summary-cards
@@ -1483,18 +1559,34 @@ function startCountdown() {
   if (countdownTimer) clearInterval(countdownTimer);
 
   countdownTimer = setInterval(function() {
+    // While a refresh is in-flight, hold at 0 — don't decrement or re-trigger
+    if (_bgRefreshInProgress) {
+      if (txt) txt.textContent = "\u27F3";
+      if (bar) bar.style.width = "100%";
+      return;
+    }
+
     countdownSecs--;
     const total = interval();
     if (txt) txt.textContent = countdownSecs;
     if (bar) bar.style.width = ((total - countdownSecs) / total * 100) + "%";
 
     if (countdownSecs <= 0) {
-      countdownSecs = interval();
-      // Only hit the backend when the tab is visible — saves ~60% Lambda cost
-      // when user has minimised the window or stepped away
+      // Pause countdown at 0 until refresh completes — gives user a full
+      // 60s of usable data between refreshes (not 60s minus load time)
+      countdownSecs = 0;
+      if (txt) txt.textContent = "\u27F3";  // ⟳ cycle symbol = "refreshing now"
+
       if (document.visibilityState === "visible") {
-        loadStocks(true);
+        // loadStocks returns a promise; restart countdown AFTER it finishes
+        loadStocks(true).then(function() {
+          countdownSecs = interval();
+        }).catch(function() {
+          countdownSecs = interval();
+        });
         loadNews();
+      } else {
+        countdownSecs = interval();
       }
       loadIndexData(); // always ping market status (cheap — 256MB, ~1s)
     }
