@@ -1490,9 +1490,13 @@ function startCountdown() {
 
     if (countdownSecs <= 0) {
       countdownSecs = interval();
-      loadStocks(true);
-      loadNews();
-      loadIndexData();
+      // Only hit the backend when the tab is visible — saves ~60% Lambda cost
+      // when user has minimised the window or stepped away
+      if (document.visibilityState === "visible") {
+        loadStocks(true);
+        loadNews();
+      }
+      loadIndexData(); // always ping market status (cheap — 256MB, ~1s)
     }
   }, 1000);
 }

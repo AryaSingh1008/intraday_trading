@@ -2,7 +2,7 @@
 
 **Real-time NSE/BSE stock analysis with institutional-grade AI signals.**
 
-A fully serverless cloud platform combining technical analysis, news sentiment, and AI-powered recommendations. Deployed on AWS with 100% uptime, zero infrastructure overhead, and pay-as-you-go pricing (~$2–8/month).
+A fully serverless cloud platform combining technical analysis, news sentiment, and AI-powered recommendations. Deployed on AWS with 100% uptime, zero infrastructure overhead, and pay-as-you-go pricing (~$17–22/month for an active trading day user).
 
 
 ---
@@ -21,10 +21,10 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 
 | Feature | Typical Trading Tools | This Platform |
 |---------|----------------------|---------------|
-| **Cost** | ₹500–2000/month | ~$2–8/month (AWS free tier + Bedrock AI) |
+| **Cost** | ₹500–2000/month | ~$17–22/month (60s intraday refresh + Bedrock AI) |
 | **AI Chat** | None or basic | Ask anything in plain English, Claude Haiku 3.5 provides institutional analysis |
-| **Signal Engine** | 2–3 indicators | 12 indicators + VWAP + support/resistance + 200-day SMA + AI-validated + news sentiment (adaptive weighting) |
-| **News Sentiment** | Separate tab / manual reading | Built into signal score — 6 RSS feeds auto-weighted by recency + source authority |
+| **Signal Engine** | 2–3 indicators | 13 indicators + VWAP + ORB + support/resistance + 200-day SMA + AI-validated + news sentiment (adaptive weighting) |
+| **News Sentiment** | Separate tab / manual reading | Built into signal score — 6 RSS feeds auto-weighted by recency (intraday-tightened) + source authority |
 | **Data Source** | Paid APIs | 100% free (yfinance, NSE, Google News RSS, Bedrock AI) |
 | **Infrastructure** | Always-on servers | Serverless — scales to $0 when market is closed |
 | **Index Strip** | Separate terminal / app | NIFTY 50, BANKNIFTY, India VIX live in the header — always visible |
@@ -107,19 +107,34 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - Always visible above the stock grid — no need to dig into tabs
 - Each pill shows symbol, direction arrow, % change, and current price
 
-### 📊 Signal Summary Cards
-- **5 signal-type counts** (STRONG BUY / BUY / HOLD / SELL / STRONG SELL) displayed as cards at the top of the Intraday tab
-- Avg AI confidence score card — shows overall market sentiment at a glance
-- Top 5 stock picks highlighted as chips inside the card
+### 📊 Compact Signal Pill Bar
+- **5 signal-type counts** (STRONG BUY / BUY / HOLD / SELL / STRONG SELL) compressed into a single-row interactive pill bar — pushes the stock grid above the fold
+- Each pill is **clickable** — tap 🟢 S.BUY to instantly filter to only STRONG BUY stocks
+- Avg AI score badge and total stocks analysed shown inline
+- Top 5 BUY picks by score shown as clickable chips beneath the bar
+
+### 🔄 Signal Changed Badge
+- Stocks that changed signal since the last refresh show an **↑ UPGRADED** (green) or **↓ DOWNGRADED** (red) badge on the card
+- Detected client-side via localStorage snapshot — no extra API call
 
 ### 🎯 Risk:Reward Ratio on Every Card
 - Each stock card shows **R:R ratio** (e.g. R:R 1:2.4) calculated from ATR-based target and stop-loss
 - Colour-coded: green ≥ 2:1, amber ≥ 1:1, red < 1:1
 - Signal timestamp shows when the analysis was last computed (IST)
 
-### 🕐 Market Status & Auto-Refresh
+### 📅 Day High / Low on Cards
+- Each stock card shows today's **intraday High and Low** (from 15-min bars) alongside the current price
+- **ORB tag** (🟣 ORB) appears on cards where an Opening Range Breakout has been detected
+
+### 🔃 Sort Bar
+- Sort the stock grid by: **⭐ Score** (default) | **🎯 R:R ratio** | **📈 Change%** | **📊 Volume**
+- Clicking a sector filter automatically resets the signal filter to "All" — so Banking / Finance / etc. always show stocks regardless of market conditions
+
+### 🕐 Smart Auto-Refresh
 - IST market hours indicator (9:15 AM – 3:30 PM, weekdays)
-- 5-minute auto-refresh countdown with progress bar
+- **Dynamic refresh interval**: 60 seconds during market hours, 5 minutes after hours — so you never miss a fast intraday move
+- **Tab-visibility guard**: refresh pauses automatically when you minimise or switch away from the tab — saves ~60% of Lambda compute cost with zero UX impact
+- Refresh interval badge shows current mode (`1m` / `5m`) next to the countdown
 - Every refresh fetches **live data directly** — no stale cache, prices always reflect current market
 
 ---
@@ -248,11 +263,11 @@ Yahoo Finance (1yr daily + 1d intraday 15m bars)
 ┌─── TECHNICAL AGENT ────────────────────────────────────┐
 │  12 Indicators → Score 0–100                           │
 │                                                        │
-│  RSI (±20)  │ MACD (±15)      │ Bollinger (±15)       │
-│  EMA 9/21 (±15) │ SMA 20/50 (±10) │ SMA 200 (±8)     │
+│  RSI (±20)  │ MACD crossover (±15) │ Bollinger (±15)    │
+│  EMA 9/21 (±15) │ SMA 20/50 (±10)  │ SMA 200 (±8)    │
 │  Golden/Death Cross (±6/±12)  │ Volume z-score (±10)  │
 │  ADX (±8)   │ Stochastic RSI (±8)  │ RSI Div (±12)   │
-│  VWAP (±8)  │ Support/Resistance (±5)                 │
+│  VWAP (±8)  │ ORB (±6/±10)  │ Support/Resistance (±5)│
 │                                                        │
 │  + Relative Strength vs NIFTY 50 (±5)                 │
 └─────────────────┬──────────────────────────────────────┘
@@ -338,7 +353,7 @@ User: "Should I buy RELIANCE today?"
 | `trading_news_sentiment` | News aggregation endpoint | 20s | backend, nlp |
 | `trading_wishlist` | Wishlist CRUD operations | 10s | backend |
 | `trading_portfolio` | Holdings P&L tracker | 10s | backend |
-| `trading_market_status` | IST market hours + NIFTY 50 / BANKNIFTY / India VIX live prices | 15s | backend, heavy |
+| `trading_market_status` | IST market hours + NIFTY 50 / BANKNIFTY / India VIX live prices | 15s | backend (stdlib only — no yfinance) |
 | `trading_excel_export` | XLSX generation + pre-signed S3 URL | 10s | backend, export |
 | `trading_cache_clear` | Manual cache invalidation | 5s | backend |
 
@@ -403,9 +418,10 @@ User: "Should I buy RELIANCE today?"
 | **Stochastic RSI** | 14, K=3, D=3 | ±8 | K/D crossovers in oversold/overbought zones |
 | **SMA 200** | 200 | ±8 | Long-term trend filter |
 | **VWAP** | Intraday | ±8 | Intraday fair value — above = bullish |
+| **ORB (Opening Range Breakout)** | First 15m candle | ±6/±10 | Price above/below first candle; +10 if volume-confirmed |
 | **Golden/Death Cross** | 50 vs 200 | ±6/±12 | Volume-confirmed 50-day vs 200-day crossover |
-| **Support/Resistance** | Pivot points | ±5 | Price near S1/R1 — bounce/rejection zones |
-| **Relative Strength** | vs NIFTY 50 | ±5 | RS >1.2 outperforming, <0.8 underperforming |
+| **Support/Resistance** | Pivot points | ±5 | Price near nearest S1/S2/R1/R2 — bounce/rejection zones |
+| **Relative Strength** | vs NIFTY 50 | ±5 | RS = (1+stock_return)/(1+nifty_return) — >1.2 outperforming |
 
 ### AI Signal Validator (Claude Haiku 3.5)
 - Receives all 12 indicators + sentiment score + relative strength vs NIFTY 50
@@ -425,7 +441,7 @@ User: "Should I buy RELIANCE today?"
 - HIGH impact headlines get weight boost
 
 **Weighting:**
-- Recency: 6h → 1.0, 24h → 0.85, 72h → 0.45, older → 0.30
+- Recency (tightened for intraday): ≤2h → 1.0, ≤4h → 0.70, ≤6h → 0.40, ≤12h → 0.20, older → 0.05
 - Source authority: ET/MC → 1.3x, BS/LM → 1.2x, others → 1.0x
 - Combined: recency × authority
 
@@ -542,25 +558,32 @@ intraday_trading/
 
 ## 💰 Cost Breakdown
 
-**Monthly cost @ moderate usage:**
+**Monthly cost @ moderate usage (single active user):**
 
 | AWS Service | Free Tier Allowance | My Usage | Monthly Cost |
 |-------------|-------------------|----------|-------------|
-| **Lambda** | 1M requests/month | ~50K requests | **₹0** |
+| **Lambda** | 400K GB-sec + 1M requests | ~1.4M GB-sec | **~$17** |
 | **DynamoDB** | 25 RCU/WCU always-free | ~10 RCU/WCU | **₹0** |
-| **API Gateway** | 1M requests/month | ~50K requests | **₹0** |
+| **API Gateway** | 1M requests/month | ~200K requests | **₹0** |
 | **CloudFront** | 1 TB data transfer | ~5 GB | **₹0** |
 | **S3** | 5 GB storage | ~100 MB | **₹0** |
 | **EventBridge** | 14M invocations/month | ~10K invocations | **₹0** |
 | **CloudWatch** | 5 GB logs/month | ~2 GB | **₹0** |
 | **Bedrock AI** | — | ~2–5M tokens | **₹150–400** |
-| | | **TOTAL** | **~₹200–600/month** |
+| | | **TOTAL** | **~$17–22/month (~₹1,400–1,800)** |
+
+> **Why Lambda exceeds free tier:** The 60-second market-hours refresh (9:15–3:30 IST) creates ~375 refresh cycles/day during trading hours. Each cycle hits the stock signal Lambda (1 GB RAM, ~20s × 4 pages), pushing monthly GB-seconds to ~1.4M — above the 400K free tier limit.
+
+**Cost optimisations built in:**
+- **Tab-visibility guard** — refresh pauses when the browser tab is hidden/minimised, saving ~50–60% of compute on typical usage
+- **`trading_market_status` Lambda** rewritten to use `urllib.request` (stdlib) instead of yfinance — cut duration from ~10s to ~1s and memory from 512 MB to 256 MB (~90% cheaper per call)
+- After market hours (17.75h/day): refresh drops to 5 minutes → 213 cycles vs 375 — no extra cost outside trading hours
 
 **Bedrock AI cost detail:**
 - Claude Haiku 3.5: ~$0.25/1M input tokens, ~$1.25/1M output tokens (signal validation + chat)
 - Nova Micro: ~$0.035/1M input tokens (headline classification only)
 
-**Comparison:** Zerodha Streak (₹500/mo) | Chartink Pro (₹1500/mo) | TradingView (₹1000/mo) — none include AI chat.
+**Comparison:** Zerodha Streak (₹500/mo) | Chartink Pro (₹1500/mo) | TradingView (₹1000/mo) — none include AI chat, intraday ORB signals, or options Greeks.
 
 ---
 
