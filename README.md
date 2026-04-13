@@ -52,6 +52,7 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - First 20 stocks load instantly (~3s), remaining stocks load in background
 - Paginated view (20 stocks per page) with smooth navigation
 - No more waiting for all 80 stocks — browse page 1 while pages 2–4 load behind the scenes
+- Once all 80 stocks are loaded, **cards never vanish on refresh** — only the data inside updates (merge-in-place); no blank screen, no disappearing cards
 - Sector filtering and free-form search across all loaded stocks
 
 ### 🤖 AI Chat (Claude Haiku 3.5 via Bedrock Agent)
@@ -80,7 +81,7 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - Aggregates news from **6 RSS feeds**: Economic Times, Moneycontrol, LiveMint, Business Standard, Yahoo Finance, Google News
 - Each headline tagged **Bullish / Bearish / Neutral** using VADER NLP + 100+ finance domain lexicon
 - **Source authority weighting**: ET/Moneycontrol (1.3x), Business Standard/LiveMint (1.2x)
-- **Recency weighting**: 6h → 1.0, 24h → 0.85, 72h → 0.45, older → 0.30
+- **Recency weighting** (intraday-tightened): ≤2h → 1.0, ≤4h → 0.70, ≤6h → 0.40, ≤12h → 0.20, older → 0.05
 - AI Headline Classifier (Nova Micro) reclassifies top 3 headlines for impact (HIGH/MEDIUM/LOW)
 
 ### ⭐ Wishlist & Excel Export
@@ -136,6 +137,8 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - **Tab-visibility guard**: refresh pauses automatically when you minimise or switch away from the tab — saves ~60% of Lambda compute cost with zero UX impact
 - Refresh interval badge shows current mode (`1m` / `5m`) next to the countdown
 - Every refresh fetches **live data directly** — no stale cache, prices always reflect current market
+- **Stale-while-revalidate architecture**: on every refresh cycle, existing stock cards stay visible immediately; fresh data is merged in-place as each page arrives — no blanking, no 30-second waits
+- **Overlap-safe**: the background refresh guard stays active until all 4 pages finish loading, preventing overlapping refreshes if a cycle runs long
 
 ---
 
@@ -441,8 +444,8 @@ User: "Should I buy RELIANCE today?"
 - HIGH impact headlines get weight boost
 
 **Weighting:**
-- Recency (tightened for intraday): ≤2h → 1.0, ≤4h → 0.70, ≤6h → 0.40, ≤12h → 0.20, older → 0.05
-- Source authority: ET/MC → 1.3x, BS/LM → 1.2x, others → 1.0x
+- **Recency** (intraday-tightened): ≤2h → 1.0, ≤4h → 0.70, ≤6h → 0.40, ≤12h → 0.20, older → 0.05 — stale headlines have near-zero weight
+- **Source authority**: ET/MC → 1.3x, BS/LM → 1.2x, others → 1.0x
 - Combined: recency × authority
 
 **Final Score:** -50 (bearish) to +50 (bullish)
@@ -675,6 +678,12 @@ aws cloudfront create-invalidation --distribution-id $DIST --paths "/*"
 - 📊 **Performance Dashboard** — Signal accuracy tracking over time
 
 **Recently Shipped:**
+- ✅ **Refresh Architecture** — Stale-while-revalidate + merge-in-place: all 80 cards stay on screen during every refresh; background refresh guard covers all 4 pages to prevent overlap; single DOM render pass per cycle (was 4×)
+- ✅ **Sector Filter Fix** — Default signal filter changed to "All"; clicking a sector auto-resets the signal filter so Banking/Finance/etc. always show stocks regardless of market conditions
+- ✅ **Sort Bar** — Sort grid by Score / R:R ratio / Change% / Volume with one click
+- ✅ **Compact Signal Pill Bar** — 5-signal summary compressed into a single interactive row above the grid; each pill filters the view on click
+- ✅ **ORB + Day High/Low** — Opening Range Breakout detection on cards with intraday high/low from 15-min bars
+- ✅ **Signal Changed Badge** — ↑ UPGRADED / ↓ DOWNGRADED badge on cards that changed signal since the last refresh (localStorage snapshot, no extra API call)
 - ✅ **Live Data** — Removed 15-min DynamoDB cache; all signals now computed fresh on every request so buy/sell targets always match current price
 - ✅ **Cognito Authentication** — Email/password login with per-user wishlist and portfolio isolation
 - ✅ **CI/CD Pipeline** — GitHub Actions deploys infrastructure and frontend on push to `main`
