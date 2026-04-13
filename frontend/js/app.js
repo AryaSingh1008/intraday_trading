@@ -447,25 +447,16 @@ async function loadStocks(forceRefresh) {
       await fetch("/api/cache", { method: "DELETE" });
     }
 
-    // Fetch page 1 into temporary variables — grid stays visible with old data
-    const newLoadedPages = {};
+    // Fetch page 1 fresh — all 80 cards stay on screen while this loads
     const r = await fetch("/api/stocks?page=1&per_page=" + STOCKS_PER_PAGE);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
 
     const newStocks = data.stocks || [];
-    const newTotal  = data.total || newStocks.length;
-    newLoadedPages[1] = true;
+    totalStocksCount = data.total || allStocks.length;
 
-    // Atomic swap — replace allStocks, re-render in one shot (no flicker)
-    allStocks        = newStocks;
-    totalStocksCount = newTotal;
-    loadedPages      = newLoadedPages;
-    backgroundLoadDone = false;
-
-    // Keep currentPage if still valid, else reset to 1
-    const newTotalPages = Math.ceil(totalStocksCount / STOCKS_PER_PAGE);
-    if (currentPage > newTotalPages) currentPage = 1;
+    // MERGE into existing array — cards never vanish, only data updates
+    _mergeStocks(allStocks, newStocks);
 
     renderStocks();
     renderSignalStats();
@@ -475,8 +466,8 @@ async function loadStocks(forceRefresh) {
     await loadWishlistSymbols();
     _syncAllHearts();
 
-    // Background-load remaining pages (appends to the new allStocks)
-    _loadRemainingStocks();
+    // Progressively refresh pages 2-4 in merge mode (force = true)
+    _loadRemainingStocks(true);
   } catch (e) {
     console.error("Background refresh failed:", e);
     // Old data stays on screen — no error overlay needed
@@ -490,27 +481,32 @@ async function loadStocks(forceRefresh) {
 let totalStocksCount = 0;   // total stocks on the server
 let loadedPages      = {};  // track which pages have been fetched
 
-async function _loadRemainingStocks() {
-  // Load pages 2, 3, 4 sequentially in background instead of fetching all at once
+// forceAll = true  → merge mode: re-fetch all pages, update data in-place (background refresh)
+// forceAll = false → append mode: fetch only missing pages, add new stocks (initial load)
+async function _loadRemainingStocks(forceAll) {
   if (!totalStocksCount) return;
   const totalPages = Math.ceil(totalStocksCount / STOCKS_PER_PAGE);
 
   for (let pg = 2; pg <= totalPages; pg++) {
-    if (loadedPages[pg]) continue;
+    if (!forceAll && loadedPages[pg]) continue;   // skip already-loaded pages on initial load
     try {
       const r = await fetch("/api/stocks?page=" + pg + "&per_page=" + STOCKS_PER_PAGE);
       if (!r.ok) continue;
       const data = await r.json();
       const newStocks = data.stocks || [];
 
-      // Append new stocks (avoid duplicates)
-      const existingSymbols = new Set(allStocks.map(s => s.symbol));
-      newStocks.forEach(s => { if (!existingSymbols.has(s.symbol)) allStocks.push(s); });
+      if (forceAll) {
+        // Merge mode: update existing cards in-place, all 80 stay visible
+        _mergeStocks(allStocks, newStocks);
+      } else {
+        // Append mode: add stocks that aren't loaded yet
+        const existingSymbols = new Set(allStocks.map(s => s.symbol));
+        newStocks.forEach(s => { if (!existingSymbols.has(s.symbol)) allStocks.push(s); });
+      }
       loadedPages[pg] = true;
 
       renderSummaryCards();
-      // Only re-render if user is on a page that now has data
-      if (currentPage === pg) renderStocks();
+      renderStocks();   // re-render on every page — data has updated
     } catch (e) {
       console.error("Background page " + pg + " load failed:", e);
     }
@@ -541,6 +537,21 @@ function _showUpdateIndicator() {
 function _hideUpdateIndicator() {
   var ind = document.getElementById("bg-update-indicator");
   if (ind) ind.classList.remove("show");
+}
+
+// ── Merge fresh stock data into existing array (preserves order, no vanishing) ──
+// Updates matched symbols in-place; appends genuinely new symbols.
+function _mergeStocks(existing, incoming) {
+  var incomingMap = {};
+  incoming.forEach(function(s) { if (s.symbol) incomingMap[s.symbol] = s; });
+  for (var i = 0; i < existing.length; i++) {
+    if (incomingMap[existing[i].symbol]) {
+      existing[i] = incomingMap[existing[i].symbol];
+      delete incomingMap[existing[i].symbol];
+    }
+  }
+  // Append any brand-new symbols (stock list expansion edge-case)
+  Object.keys(incomingMap).forEach(function(sym) { existing.push(incomingMap[sym]); });
 }
 
 // renderSummaryCards is now handled by renderSignalStats which writes to #summary-cards
