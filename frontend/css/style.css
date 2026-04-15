@@ -1748,7 +1748,7 @@ body {
 }
 .swing-settings-bar label {
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: #6c757d;
   margin-bottom: 0;
   white-space: nowrap;
 }
@@ -1759,9 +1759,9 @@ body {
 }
 .swing-input-group input,
 .swing-input-group select {
-  background: var(--input-bg, #1e1e2e);
+  background: var(--surface);
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--text-primary);
   border-radius: 6px;
   padding: 4px 10px;
   font-size: 0.82rem;
@@ -1785,7 +1785,7 @@ body {
 }
 .swing-sum-label {
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: #6c757d;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 4px;
@@ -1793,11 +1793,11 @@ body {
 .swing-sum-value {
   font-size: 1.3rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .swing-sum-sub {
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: #6c757d;
   margin-top: 2px;
 }
 
@@ -1815,7 +1815,7 @@ body {
 }
 .swing-table thead th {
   background: var(--header-bg, #1a1a2e);
-  color: var(--text-muted);
+  color: #6c757d;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1834,8 +1834,8 @@ body {
   vertical-align: middle;
   white-space: nowrap;
 }
-.swing-sym { font-weight: 700; color: var(--text); }
-.swing-name { font-size: 0.72rem; color: var(--text-muted); }
+.swing-sym { font-weight: 700; color: var(--text-primary); }
+.swing-name { font-size: 0.72rem; color: #6c757d; }
 
 /* ── Exit signal badges ──────────────────────────────────────────────── */
 .swing-exit-badge {
@@ -1877,8 +1877,8 @@ body {
   padding: 12px 14px 10px;
   border-bottom: 1px solid var(--border);
 }
-.swing-pick-sym  { font-size: 1rem; font-weight: 700; color: var(--text); }
-.swing-pick-name { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+.swing-pick-sym  { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+.swing-pick-name { font-size: 0.7rem; color: #6c757d; margin-top: 2px; }
 .swing-pick-body { padding: 10px 14px 14px; }
 .swing-levels {
   display: grid;
@@ -1887,8 +1887,8 @@ body {
   margin-bottom: 10px;
 }
 .swing-level-item { text-align: center; }
-.swing-level-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
-.swing-level-val   { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.swing-level-label { font-size: 0.65rem; color: #6c757d; text-transform: uppercase; }
+.swing-level-val   { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
 
 /* ── Score bar ───────────────────────────────────────────────────────── */
 .swing-score-bar {

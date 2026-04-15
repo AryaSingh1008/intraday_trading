@@ -171,30 +171,29 @@ async def _analyse_positional(portfolio: int = 100_000,
                                max_positions: int = 6) -> dict:
     """
     Score all stocks in positional mode, return the top 8 BUY/STRONG BUY picks.
-    Injects portfolio params into stock_data so signal_agent can size positions.
+    Fetches all symbols in one yfinance batch (vs sequential batches of 10) so
+    the full run completes in ~8s — well within the 29s API Gateway timeout.
     """
     all_symbols = list(INDIAN_STOCKS.items())
-    results = []
-    BATCH_SIZE = 10
 
-    for i in range(0, len(all_symbols), BATCH_SIZE):
-        batch        = all_symbols[i : i + BATCH_SIZE]
-        batch_syms   = [sym for sym, _ in batch]
-        batch_data   = await _fetcher.get_batch_stock_data(batch_syms)
+    # One batch download for all symbols — yf.download handles multi-ticker
+    # efficiently in a single network round-trip.
+    all_syms  = [sym for sym, _ in all_symbols]
+    batch_data = await _fetcher.get_batch_stock_data(all_syms)
 
-        tasks = []
-        for symbol, info in batch:
-            sd = batch_data.get(symbol)
-            if not sd:
-                continue
-            # Inject allocation params so signal_agent uses them for position sizing
-            sd["_portfolio"]     = portfolio
-            sd["_max_positions"] = max_positions
-            tasks.append(_analyse_fresh(symbol, info["name"], sd,
-                                        sector=info.get("sector", "Others"),
-                                        mode="positional"))
-        if tasks:
-            results.extend(await asyncio.gather(*tasks))
+    tasks = []
+    for symbol, info in all_symbols:
+        sd = batch_data.get(symbol)
+        if not sd:
+            continue
+        # Inject allocation params so signal_agent uses them for position sizing
+        sd["_portfolio"]     = portfolio
+        sd["_max_positions"] = max_positions
+        tasks.append(_analyse_fresh(symbol, info["name"], sd,
+                                    sector=info.get("sector", "Others"),
+                                    mode="positional"))
+
+    results = list(await asyncio.gather(*tasks)) if tasks else []
 
     # Filter: only BUY / STRONG BUY with score >= 55 and valid target/SL
     picks = [

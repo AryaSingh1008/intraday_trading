@@ -67,7 +67,13 @@ class SignalAgent:
             )
 
             # ── Sentiment score ───────────────────────────────────────────────
-            sent_raw, sent_reasons = await _sentiment_agent.get_sentiment_score(symbol, name)
+            # Positional/swing skips live sentiment: news is intraday noise for
+            # multi-week holds, and skipping 80 fetches keeps the response within
+            # the 29-second API Gateway timeout. Neutral (0) is used instead.
+            if mode == "positional":
+                sent_raw, sent_reasons = 0.0, []
+            else:
+                sent_raw, sent_reasons = await _sentiment_agent.get_sentiment_score(symbol, name)
             # Normalise sentiment from [-50,+50] → [0,100] via tanh S-curve.
             sent_score = self._normalize_sentiment(sent_raw)
 
@@ -75,7 +81,6 @@ class SignalAgent:
             sent_abs = abs(sent_raw)
             if mode == "positional":
                 # Positional/swing: driven by price structure, not today's news.
-                # Cap sentiment at 15% regardless of news strength.
                 tech_w, sent_w = 0.85, 0.15
             elif sent_abs >= 25:
                 tech_w, sent_w = 0.55, 0.45
