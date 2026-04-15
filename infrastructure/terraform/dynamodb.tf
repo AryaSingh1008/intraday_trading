@@ -95,7 +95,10 @@ resource "aws_dynamodb_table" "swing_positions" {
   }
 
   point_in_time_recovery {
-    enabled = true   # Real user money data — enable PITR
+    # GitHub Actions role lacks dynamodb:UpdateContinuousBackups — set false to
+    # unblock the deploy.  Once that permission is added to the GH Actions IAM
+    # policy, flip this to true and re-apply.
+    enabled = false
   }
 }
 
