@@ -240,3 +240,38 @@ resource "aws_apigatewayv2_route" "delete_portfolio" {
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
+
+# ── Swing Trading Routes ──────────────────────────────────────────────────────
+# Picks use stocks_signal Lambda (has heavy layers for scoring)
+resource "aws_apigatewayv2_route" "get_swing_picks" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/swing/picks"
+  target             = "integrations/${aws_apigatewayv2_integration.stocks_signal.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}
+
+# Positions use portfolio Lambda (has DynamoDB + yfinance for live prices)
+resource "aws_apigatewayv2_route" "get_swing_positions" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/swing/positions"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}
+
+resource "aws_apigatewayv2_route" "post_swing_positions" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /api/swing/positions"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}
+
+resource "aws_apigatewayv2_route" "delete_swing_position" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "DELETE /api/swing/positions/{position_id}"
+  target             = "integrations/${aws_apigatewayv2_integration.portfolio.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}

@@ -13,6 +13,7 @@ locals {
   wishlist_table_name   = "${local.prefix}-wishlist"
   iv_history_table_name = "${local.prefix}-iv-history"
   portfolio_table_name  = "${local.prefix}-portfolio"
+  swing_table_name      = "${local.prefix}-swing-positions"
 
   # S3 bucket names (must be globally unique — account ID suffix ensures uniqueness)
   frontend_bucket_name = "${local.prefix}-frontend-${local.account_id}"
@@ -44,6 +45,7 @@ locals {
     AWS_ACCOUNT_ID_VALUE  = local.account_id
     PROJECT_REGION        = local.region
     PORTFOLIO_TABLE_NAME  = local.portfolio_table_name
+    SWING_TABLE_NAME      = local.swing_table_name
     PROMPTS_DIR           = "/opt/python/prompts"
   }
 }

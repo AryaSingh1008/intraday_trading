@@ -59,6 +59,7 @@ data "aws_iam_policy_document" "lambda_dynamodb" {
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.wishlist_table_name}",
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.iv_history_table_name}",
       "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.portfolio_table_name}",
+      "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${local.swing_table_name}",
     ]
   }
 }

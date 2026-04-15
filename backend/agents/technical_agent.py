@@ -36,18 +36,39 @@ class TechnicalAgent:
 
     def analyze(self, hist: pd.DataFrame, current_price: float,
                 volume: int, avg_volume: int,
-                intraday: list = None) -> Tuple[float, List[str], dict]:
+                intraday: list = None,
+                mode: str = "intraday") -> Tuple[float, List[str], dict]:
         """
         Returns (score 0-100, list_of_reasons, extras_dict).
         score > 65  →  BUY territory
         score 35-65 →  HOLD territory
         score < 35  →  SELL territory
 
+        mode="intraday"   → full scoring (VWAP, ORB, all indicators)
+        mode="positional"  → swing/positional scoring (no VWAP/ORB, boosted 200 SMA & Golden Cross)
+
         extras_dict contains: vwap, support_level, resistance_level, atr
         """
         score   = 50.0   # neutral starting point
         reasons = []
         extras  = {"vwap": None, "support_level": None, "resistance_level": None, "atr": None}
+
+        # ── Mode-dependent weights ────────────────────────────────────────────
+        # Positional mode: boost long-term trend indicators, skip intraday noise
+        if mode == "positional":
+            W_SMA200      = 15   # ±15 (was ±8)  — most important for swing
+            W_CROSS_VOL   = 18   # ±18 (was ±12) — strongest multi-week signal
+            W_CROSS_BASE  = 10   # ±10 (was ±6)  — still valuable, less conviction
+            W_SMA20_50    = 12   # ±12 (was ±10) — medium-term trend confirmation
+            W_VWAP        = 0    # skip — resets daily
+            W_ORB         = 0    # skip — resets daily
+        else:
+            W_SMA200      = 8
+            W_CROSS_VOL   = 12
+            W_CROSS_BASE  = 6
+            W_SMA20_50    = 10
+            W_VWAP        = 8
+            W_ORB         = 0    # placeholder — ORB uses inline 6/10 values
 
         try:
             close  = hist["Close"].astype(float)
@@ -166,10 +187,10 @@ class TechnicalAgent:
                 sma50 = float(close.rolling(50).mean().iloc[-1])
 
                 if sma20 > sma50:
-                    score += 10
+                    score += W_SMA20_50
                     reasons.append("20-day average is above 50-day average — uptrend confirmed")
                 else:
-                    score -= 10
+                    score -= W_SMA20_50
                     reasons.append("20-day average is below 50-day average — downtrend in place")
 
                 if current_price > sma20:
@@ -183,10 +204,10 @@ class TechnicalAgent:
             if len(close) >= 200:
                 sma200 = float(close.rolling(200).mean().iloc[-1])
                 if current_price > sma200:
-                    score += 8
+                    score += W_SMA200
                     reasons.append("Price is above 200-day SMA — long-term uptrend intact")
                 else:
-                    score -= 8
+                    score -= W_SMA200
                     reasons.append("Price is below 200-day SMA — long-term downtrend warning")
 
                 # Golden Cross / Death Cross — 20-day lookback + volume confirmation
@@ -203,7 +224,7 @@ class TechnicalAgent:
                         if vol_std > 0:
                             vol_zscore_cross = (float(vol.iloc[-1]) - vol_mean) / vol_std
 
-                    cross_pts = 12 if vol_zscore_cross > 1.0 else 6  # full pts if confirmed by volume
+                    cross_pts = W_CROSS_VOL if vol_zscore_cross > 1.0 else W_CROSS_BASE
 
                     if sma50_now > sma200 and sma50_prev <= sma200_prev:
                         score += cross_pts
@@ -297,23 +318,23 @@ class TechnicalAgent:
                 elif atr_pct < 1.0:
                     reasons.append(f"Low volatility stock (ATR: {atr_pct}% of price) — tight, stable moves expected")
 
-            # ── 7.  VWAP — intraday fair value ─────────────────────────────────
+            # ── 7.  VWAP — intraday fair value (skipped in positional mode) ────
             vwap_val = self._vwap(intraday) if intraday else None
             extras["vwap"] = vwap_val
-            if vwap_val is not None and current_price > 0:
+            if W_VWAP > 0 and vwap_val is not None and current_price > 0:
                 diff_pct = (current_price - vwap_val) / vwap_val * 100
                 if current_price > vwap_val:
-                    score += 8
+                    score += W_VWAP
                     reasons.append(f"Price ₹{current_price:.0f} is above VWAP ₹{vwap_val:.0f} (+{diff_pct:.1f}%) — intraday bullish bias")
                 else:
-                    score -= 8
+                    score -= W_VWAP
                     reasons.append(f"Price ₹{current_price:.0f} is below VWAP ₹{vwap_val:.0f} ({diff_pct:.1f}%) — intraday bearish bias")
 
-            # ── 7b. Opening Range Breakout (ORB) ───────────────────────────────
+            # ── 7b. Opening Range Breakout (ORB) — skipped in positional mode ──
             # First 15m candle (9:15–9:30 IST) sets the day's bias.
             # Breakout above ORB high = strong intraday bullish signal.
             # Breakdown below ORB low = strong intraday bearish signal.
-            if intraday and len(intraday) >= 2 and current_price > 0:
+            if mode != "positional" and intraday and len(intraday) >= 2 and current_price > 0:
                 try:
                     orb_high  = intraday[0]["high"]
                     orb_low   = intraday[0]["low"]

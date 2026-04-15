@@ -160,10 +160,74 @@ async def _analyse_all(deadline: float = 0) -> list:
 
 
 async def _analyse_fresh(symbol: str, name: str, stock_data: dict,
-                         sector: str = "Others") -> dict:
-    result = await _agent.analyze(symbol, name, stock_data, sector=sector)
+                         sector: str = "Others",
+                         mode: str = "intraday") -> dict:
+    result = await _agent.analyze(symbol, name, stock_data, sector=sector, mode=mode)
     result["analysed_at"] = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%I:%M %p")
     return result
+
+
+async def _analyse_positional(portfolio: int = 100_000,
+                               max_positions: int = 6) -> dict:
+    """
+    Score all stocks in positional mode, return the top 8 BUY/STRONG BUY picks.
+    Injects portfolio params into stock_data so signal_agent can size positions.
+    """
+    all_symbols = list(INDIAN_STOCKS.items())
+    results = []
+    BATCH_SIZE = 10
+
+    for i in range(0, len(all_symbols), BATCH_SIZE):
+        batch        = all_symbols[i : i + BATCH_SIZE]
+        batch_syms   = [sym for sym, _ in batch]
+        batch_data   = await _fetcher.get_batch_stock_data(batch_syms)
+
+        tasks = []
+        for symbol, info in batch:
+            sd = batch_data.get(symbol)
+            if not sd:
+                continue
+            # Inject allocation params so signal_agent uses them for position sizing
+            sd["_portfolio"]     = portfolio
+            sd["_max_positions"] = max_positions
+            tasks.append(_analyse_fresh(symbol, info["name"], sd,
+                                        sector=info.get("sector", "Others"),
+                                        mode="positional"))
+        if tasks:
+            results.extend(await asyncio.gather(*tasks))
+
+    # Filter: only BUY / STRONG BUY with score >= 55 and valid target/SL
+    picks = [
+        r for r in results
+        if r.get("signal") in ("BUY", "STRONG BUY")
+        and r.get("score", 0) >= 55
+        and r.get("target_price")
+        and r.get("stop_loss")
+        and not r.get("error")
+    ]
+    # Sort by score descending, take top 8
+    picks.sort(key=lambda r: r.get("score", 0), reverse=True)
+    picks = picks[:8]
+
+    # Compute R:R and per-pick invest_amount (may already be set in signal_agent)
+    per_pos = round(portfolio / max_positions, 2)
+    for p in picks:
+        cur = p.get("current_price", 0)
+        tgt = p.get("target_price", 0)
+        sl  = p.get("stop_loss", 0)
+        if cur and tgt and sl and (cur - sl) > 0:
+            p["rr_ratio"] = round((tgt - cur) / (cur - sl), 2)
+        p.setdefault("invest_amount", per_pos)
+
+    return {
+        "picks":        picks,
+        "total_scored": len(results),
+        "total_passed": len(picks),
+        "portfolio":    portfolio,
+        "max_positions": max_positions,
+        "per_position": per_pos,
+        "last_updated": datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p"),
+    }
 
 
 async def _analyse_page(page: int, per_page: int) -> list:
@@ -204,6 +268,12 @@ def handler(event, context):
     path_params = event.get("pathParameters") or {}
     qs          = event.get("queryStringParameters") or {}
     is_warmup   = event.get("warmup") or qs.get("warmup") == "true"
+
+    # GET /api/swing/picks?portfolio=100000&max_positions=6
+    if "swing/picks" in raw_path:
+        portfolio     = int(qs.get("portfolio",     "100000"))
+        max_positions = int(qs.get("max_positions", "6"))
+        return _json(asyncio.run(_analyse_positional(portfolio, max_positions)))
 
     # GET /api/stocks/list — static list, no API calls
     if "list" in raw_path:

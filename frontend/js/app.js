@@ -199,6 +199,13 @@ const STOCKS_PER_PAGE  = 20;
 let backgroundLoadDone = false;
 let _bgRefreshInProgress = false;  // true while a background refresh is in-flight
 
+// ── Swing tab state ───────────────────────────────────────────────────────────
+let swingPicks      = [];
+let swingPositions  = [];
+let swingLoaded     = false;
+let swingPortfolio  = parseInt(localStorage.getItem("swingPortfolio")  || "100000");
+let swingMaxPos     = parseInt(localStorage.getItem("swingMaxPos")     || "6");
+
 // ── Init — gate on Cognito session ────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   const user = _userPool.getCurrentUser();
@@ -230,14 +237,16 @@ function switchTab(tab) {
   if (panel) panel.classList.remove("d-none");
 
   // Lazy-load on first switch
-  if (tab === "wishlist")  loadWishlist();
-  if (tab === "portfolio") loadPortfolio();
+  if (tab === "wishlist")             loadWishlist();
+  if (tab === "portfolio")            loadPortfolio();
+  if (tab === "swing" && !swingLoaded) loadSwing();
 }
 
 function refreshCurrentTab() {
   if (currentTab === "intraday")       loadStocks(true);
   else if (currentTab === "wishlist")  loadWishlist();
   else if (currentTab === "portfolio") loadPortfolio();
+  else if (currentTab === "swing")     loadSwing(true);
 }
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -1969,3 +1978,269 @@ function renderPortfolioTable(holdings) {
       + '</tr>';
   }).join("");
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SWING TRADING TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Load picks and positions in parallel, populate the Swing tab. */
+async function loadSwing(force) {
+  if (force) swingLoaded = false;
+
+  showEl("swing-loading");
+  hideEl("swing-picks-grid");
+  hideEl("swing-positions-table-wrap");
+  hideEl("swing-positions-empty");
+  hideEl("swing-picks-empty");
+
+  // Pre-fill settings inputs
+  const pInput = document.getElementById("swing-portfolio-input");
+  const mInput = document.getElementById("swing-maxpos-input");
+  if (pInput) pInput.value = swingPortfolio;
+  if (mInput) mInput.value = swingMaxPos;
+
+  try {
+    const [picksResp, posResp] = await Promise.all([
+      fetch("/api/swing/picks?portfolio=" + swingPortfolio + "&max_positions=" + swingMaxPos),
+      fetch("/api/swing/positions"),
+    ]);
+
+    const picksData = picksResp.ok ? await picksResp.json() : {};
+    const posData   = posResp.ok  ? await posResp.json()   : {};
+
+    swingPicks     = picksData.picks     || [];
+    swingPositions = posData.positions   || [];
+
+    renderSwingPortfolioSummary(posData.summary || {}, picksData);
+    renderSwingPositions(swingPositions);
+    renderSwingPicks(swingPicks);
+    updateSwingAlertBadge(posData.summary);
+
+    swingLoaded = true;
+  } catch (e) {
+    console.error("loadSwing failed:", e);
+  } finally {
+    hideEl("swing-loading");
+  }
+}
+
+/** 4 summary cards: Portfolio / Deployed / Available / Positions. */
+function renderSwingPortfolioSummary(summary, picksData) {
+  var el = document.getElementById("swing-summary-row");
+  if (!el) return;
+
+  var deployed   = summary.total_invested  || 0;
+  var curVal     = summary.current_value   || 0;
+  var totalGain  = summary.total_gain      || 0;
+  var posCount   = summary.position_count  || 0;
+  var maxPos     = swingMaxPos;
+  var available  = Math.max(0, swingPortfolio - deployed);
+  var gainCls    = totalGain >= 0 ? "text-success" : "text-danger";
+  var gainArrow  = totalGain >= 0 ? "▲" : "▼";
+  var totalScored = (picksData && picksData.total_scored) ? picksData.total_scored : 0;
+
+  el.innerHTML =
+    swingSummaryCard("💰", "Portfolio",  "₹" + fmt(swingPortfolio), "configured")
+  + swingSummaryCard("🚀", "Deployed",   "₹" + fmt(deployed),       posCount + "/" + maxPos + " positions")
+  + swingSummaryCard("🏦", "Available",  "₹" + fmt(available),      "free capital")
+  + swingSummaryCard("📊", "P&amp;L",
+      '<span class="' + gainCls + '">' + gainArrow + ' ₹' + fmt(Math.abs(totalGain)) + '</span>',
+      '<span class="' + gainCls + '">' + (summary.total_gain_pct || 0).toFixed(2) + '%</span>');
+}
+
+function swingSummaryCard(icon, label, value, sub) {
+  return '<div class="col-6 col-md-3">'
+    + '<div class="swing-summary-card">'
+    + '<div class="swing-sum-icon">' + icon + '</div>'
+    + '<div class="swing-sum-label">' + label + '</div>'
+    + '<div class="swing-sum-value">' + value + '</div>'
+    + '<div class="swing-sum-sub">' + sub + '</div>'
+    + '</div></div>';
+}
+
+/** Render the open positions table. */
+function renderSwingPositions(positions) {
+  var tbody = document.getElementById("swing-positions-tbody");
+  var wrap  = document.getElementById("swing-positions-table-wrap");
+  var empty = document.getElementById("swing-positions-empty");
+  if (!tbody) return;
+
+  if (!positions || !positions.length) {
+    showEl("swing-positions-empty");
+    hideEl("swing-positions-table-wrap");
+    return;
+  }
+  hideEl("swing-positions-empty");
+  showEl("swing-positions-table-wrap");
+
+  tbody.innerHTML = positions.map(function(p) {
+    var gain    = p.total_gain || 0;
+    var gainPct = p.total_gain_pct || 0;
+    var gCls    = gain >= 0 ? "text-success" : "text-danger";
+    var gArrow  = gain >= 0 ? "▲" : "▼";
+
+    var sigInfo = _swingExitBadge(p.exit_signal);
+    var safeId  = (p.position_id || "").replace(/'/g, "\\'");
+    var safeSym = (p.symbol || "").replace(/'/g, "\\'");
+    var safePrc = p.current_price ? p.current_price.toFixed(2) : "0";
+
+    return '<tr>'
+      + '<td><div class="fw-bold">' + (p.name || p.symbol) + '</div>'
+      + '<div class="text-muted small">' + p.symbol.replace(".NS","") + '</div></td>'
+      + '<td>₹' + fmt(p.entry_price) + '</td>'
+      + '<td>' + (p.current_price ? '₹' + fmt(p.current_price) : '<span class="text-muted">—</span>') + '</td>'
+      + '<td>' + (p.quantity || 0) + '</td>'
+      + '<td>' + (p.days_held || 0) + 'd</td>'
+      + '<td class="' + gCls + '">' + gArrow + ' ₹' + fmt(Math.abs(gain))
+      + '<div class="small">' + gainPct.toFixed(2) + '%</div></td>'
+      + '<td class="text-success small">₹' + fmt(p.target_price) + '</td>'
+      + '<td class="text-danger small">₹' + fmt(p.stop_loss) + '</td>'
+      + '<td><span class="swing-exit-badge ' + sigInfo.cls + '">' + sigInfo.label + '</span></td>'
+      + '<td><button class="btn-remove-hold" title="Close position" '
+      + 'onclick="closeSwingPosition(\'' + safeId + '\',\'' + safeSym + '\',' + safePrc + ',event)">'
+      + '<i class="bi bi-x-circle"></i></button></td>'
+      + '</tr>';
+  }).join("");
+}
+
+function _swingExitBadge(sig) {
+  if (sig === "TARGET_HIT") return { cls: "swing-badge-target",  label: "🏆 Target!" };
+  if (sig === "STOP_HIT")   return { cls: "swing-badge-stop",    label: "🔴 Stop Hit" };
+  if (sig === "TRAIL")      return { cls: "swing-badge-trail",   label: "🟡 Trail SL" };
+  return                           { cls: "swing-badge-hold",    label: "🟢 Hold" };
+}
+
+/** Render top positional pick cards. */
+function renderSwingPicks(picks) {
+  var grid  = document.getElementById("swing-picks-grid");
+  var empty = document.getElementById("swing-picks-empty");
+  var badge = document.getElementById("swing-picks-count");
+  if (!grid) return;
+
+  if (badge) badge.textContent = picks.length + " picks";
+
+  if (!picks || !picks.length) {
+    showEl("swing-picks-empty");
+    grid.innerHTML = "";
+    return;
+  }
+  hideEl("swing-picks-empty");
+
+  grid.innerHTML = picks.map(function(p) {
+    var sym     = (p.symbol || "").replace(".NS", "");
+    var score   = p.score || 0;
+    var rr      = p.rr_ratio ? p.rr_ratio.toFixed(1) : "—";
+    var rrCls   = p.rr_ratio >= 2 ? "text-success" : p.rr_ratio >= 1 ? "text-warning" : "text-danger";
+    var sigCls  = (p.signal || "").toLowerCase().replace(" ", "-");
+    var invest  = p.invest_amount || (swingPortfolio / swingMaxPos);
+    var qty     = p.suggested_qty || 1;
+
+    // Safe-escape for onclick
+    var eSym  = sym.replace(/'/g, "\\'");
+    var eName = (p.name || sym).replace(/'/g, "\\'");
+    var eEntry = (p.current_price || 0).toFixed(2);
+    var eQty   = qty;
+    var eTgt   = (p.target_price  || 0).toFixed(2);
+    var eSL    = (p.stop_loss     || 0).toFixed(2);
+    var eScore = score.toFixed(1);
+
+    return '<div class="col-12 col-sm-6 col-lg-4">'
+      + '<div class="swing-pick-card signal-' + sigCls + '">'
+      + '<div class="swing-pick-header">'
+      + '<span class="fw-bold">' + sym + '</span>'
+      + '<span class="swing-signal-pill">' + (p.signal_emoji||"") + ' ' + (p.signal||"") + '</span>'
+      + '</div>'
+      + '<div class="swing-pick-body">'
+      + '<div class="d-flex justify-content-between mb-1">'
+      + '<span class="text-muted small">Score</span>'
+      + '<span class="fw-bold">' + score.toFixed(0) + ' / 100</span>'
+      + '</div>'
+      + '<div class="swing-score-bar mb-2"><div class="swing-score-fill" style="width:' + score + '%"></div></div>'
+      + '<div class="swing-levels">'
+      + '<span>🎯 TGT <strong>₹' + fmt(p.target_price) + '</strong></span>'
+      + '<span>🛑 SL <strong>₹' + fmt(p.stop_loss) + '</strong></span>'
+      + '</div>'
+      + '<div class="d-flex justify-content-between mt-1 small">'
+      + '<span>R:R <span class="' + rrCls + ' fw-bold">1:' + rr + '</span></span>'
+      + '<span>Invest: <strong>₹' + fmt(invest) + '</strong></span>'
+      + '<span>Qty: <strong>' + qty + '</strong></span>'
+      + '</div>'
+      + '<div class="text-muted small mt-1 fst-italic" style="font-size:0.72rem">'
+      + (p.explanation || "") + '</div>'
+      + '</div>'
+      + '<button class="btn btn-sm btn-success w-100 mt-2" '
+      + 'onclick="addSwingPosition(\'' + eSym + '.NS\',\'' + eName + '\',' + eEntry + ',' + eQty + ',' + eTgt + ',' + eSL + ',' + eScore + ')">'
+      + '<i class="bi bi-plus-circle me-1"></i>Add Position</button>'
+      + '</div></div>';
+  }).join("");
+}
+
+/** POST a new swing position then reload. */
+async function addSwingPosition(symbol, name, entryPrice, qty, target, sl, score) {
+  try {
+    const r = await fetch("/api/swing/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol:             symbol,
+        name:               name,
+        entry_price:        entryPrice,
+        quantity:           qty,
+        target_price:       target,
+        stop_loss:          sl,
+        entry_signal_score: score,
+      }),
+    });
+    if (r.ok) {
+      swingLoaded = false;
+      await loadSwing();
+    }
+  } catch (e) {
+    console.error("addSwingPosition failed:", e);
+  }
+}
+
+/** DELETE /close a swing position then reload. */
+async function closeSwingPosition(positionId, symbol, exitPrice, event) {
+  if (event) event.stopPropagation();
+  if (!confirm("Close " + symbol.replace(".NS","") + " at ₹" + exitPrice + "?")) return;
+  try {
+    const r = await fetch("/api/swing/positions/" + positionId, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exit_price: exitPrice, reason: "closed" }),
+    });
+    if (r.ok) {
+      swingLoaded = false;
+      await loadSwing();
+    }
+  } catch (e) {
+    console.error("closeSwingPosition failed:", e);
+  }
+}
+
+/** Save portfolio settings to localStorage and reload picks. */
+function updateSwingSettings() {
+  var p = parseInt(document.getElementById("swing-portfolio-input")?.value || swingPortfolio);
+  var m = parseInt(document.getElementById("swing-maxpos-input")?.value    || swingMaxPos);
+  if (p >= 10000) { swingPortfolio = p; localStorage.setItem("swingPortfolio", p); }
+  if (m >= 1)     { swingMaxPos    = m; localStorage.setItem("swingMaxPos",    m); }
+  swingLoaded = false;
+  loadSwing();
+}
+
+/** Update the red alert badge on the Swing tab button. */
+function updateSwingAlertBadge(summary) {
+  var badge   = document.getElementById("swing-alert-count");
+  var alerts  = (summary && summary.alert_count) ? summary.alert_count : 0;
+  if (!badge) return;
+  if (alerts > 0) {
+    badge.textContent = alerts;
+    badge.classList.remove("d-none");
+  } else {
+    badge.classList.add("d-none");
+  }
+}
+
+// (showEl / hideEl already defined above — used throughout)

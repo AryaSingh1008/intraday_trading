@@ -74,6 +74,32 @@ resource "aws_dynamodb_table" "portfolio" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DynamoDB Table 5: trading-swing-positions
+# Stores user swing/positional trade positions with entry, target, stop-loss
+# PK: user_id (S)  SK: position_id (S, UUID)
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_dynamodb_table" "swing_positions" {
+  name         = local.swing_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  range_key    = "position_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "position_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true   # Real user money data — enable PITR
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DynamoDB Table 3: trading-iv-history
 # Replaces data/iv_history.json (30-day rolling IV history)
 # ─────────────────────────────────────────────────────────────────────────────

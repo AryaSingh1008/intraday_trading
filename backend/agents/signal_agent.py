@@ -45,9 +45,11 @@ _sentiment_agent = SentimentAgent()
 class SignalAgent:
 
     async def analyze(self, symbol: str, name: str, stock_data: dict,
-                      sector: str = "Other") -> dict:
+                      sector: str = "Other", mode: str = "intraday") -> dict:
         """
         Full analysis pipeline for one stock.
+        mode="intraday"   → standard scoring (all indicators, normal ATR stops)
+        mode="positional" → swing scoring (no VWAP/ORB, wider stops, capped sentiment)
         Returns a rich dict that the frontend renders.
         """
         try:
@@ -61,7 +63,7 @@ class SignalAgent:
 
             # ── Technical score (now includes VWAP, support/resistance) ───────
             tech_score, tech_reasons, tech_extras = _tech_agent.analyze(
-                hist, current_price, volume, avg_volume, intraday=intraday
+                hist, current_price, volume, avg_volume, intraday=intraday, mode=mode
             )
 
             # ── Sentiment score ───────────────────────────────────────────────
@@ -71,7 +73,11 @@ class SignalAgent:
 
             # ── Adaptive weights ──────────────────────────────────────────────
             sent_abs = abs(sent_raw)
-            if sent_abs >= 25:
+            if mode == "positional":
+                # Positional/swing: driven by price structure, not today's news.
+                # Cap sentiment at 15% regardless of news strength.
+                tech_w, sent_w = 0.85, 0.15
+            elif sent_abs >= 25:
                 tech_w, sent_w = 0.55, 0.45
             elif sent_abs >= 12:
                 tech_w, sent_w = 0.65, 0.35
@@ -128,43 +134,58 @@ class SignalAgent:
                 pivot_r1 = _pivots.get("r1") if _pivots else None
                 pivot_s1 = _pivots.get("s1") if _pivots else None
 
+                # Positional mode uses wider ATR multipliers — multi-day holds
+                # need room for intra-day noise without triggering the stop.
+                if mode == "positional":
+                    tgt_strong, sl_strong = 3.0, 2.0   # was 2.5 / 1.5
+                    tgt_buy,    sl_buy    = 2.0, 1.5    # was 1.5 / 1.0
+                else:
+                    tgt_strong, sl_strong = 2.5, 1.5
+                    tgt_buy,    sl_buy    = 1.5, 1.0
+
                 if signal == "STRONG BUY":
-                    raw_target = current_price + 2.5 * _atr
-                    raw_stop   = current_price - 1.5 * _atr
+                    raw_target = current_price + tgt_strong * _atr
+                    raw_stop   = current_price - sl_strong  * _atr
                     _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
                     _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
                     target_price = round(_t if _t > current_price else raw_target, 2)
                     stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "BUY":
-                    raw_target = current_price + 1.5 * _atr
-                    raw_stop   = current_price - 1.0 * _atr
+                    raw_target = current_price + tgt_buy * _atr
+                    raw_stop   = current_price - sl_buy   * _atr
                     _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
                     _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
                     target_price = round(_t if _t > current_price else raw_target, 2)
                     stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "SELL":
-                    raw_target = current_price - 1.5 * _atr
+                    raw_target = current_price - tgt_buy * _atr
                     _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
                     target_buy_price = round(_t if _t < current_price else raw_target, 2)
                 elif signal == "STRONG SELL":
-                    raw_target = current_price - 2.5 * _atr
+                    raw_target = current_price - tgt_strong * _atr
                     _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
                     target_buy_price = round(_t if _t < current_price else raw_target, 2)
 
-            # ── Position sizing (2% risk rule, Rs 1 lakh default portfolio) ────
+            # ── Position sizing (2% risk rule) ────────────────────────────────
+            # For positional mode, max_per_position = portfolio / max_positions
+            # (passed via stock_data so the handler can customise per-request).
             suggested_qty = None
             risk_amount   = None
+            invest_amount = None
             if stop_loss and stop_loss < current_price and current_price > 0:
                 try:
-                    portfolio     = 100_000
+                    portfolio     = stock_data.get("_portfolio", 100_000)
+                    max_positions = stock_data.get("_max_positions", 10)
                     risk_pct      = 0.02
                     max_risk      = portfolio * risk_pct
+                    max_per_pos   = portfolio / max_positions
                     risk_per_share = current_price - stop_loss
                     if risk_per_share > 0:
                         qty_by_risk  = int(max_risk / risk_per_share)
-                        qty_by_cap   = int((portfolio * 0.10) / current_price)
+                        qty_by_cap   = int(max_per_pos / current_price)
                         suggested_qty = max(1, min(qty_by_risk, qty_by_cap))
                         risk_amount   = round(suggested_qty * risk_per_share, 2)
+                        invest_amount = round(suggested_qty * current_price, 2)
                 except Exception:
                     pass
 
@@ -210,6 +231,7 @@ class SignalAgent:
                 "target_buy_price": target_buy_price,
                 "suggested_qty":    suggested_qty,
                 "risk_amount":      risk_amount,
+                "invest_amount":    invest_amount,
                 "vwap":             tech_extras.get("vwap"),
                 "support_level":    tech_extras.get("support_level"),
                 "resistance_level": tech_extras.get("resistance_level"),
