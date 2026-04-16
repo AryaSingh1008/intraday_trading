@@ -218,10 +218,6 @@
         <i class="bi bi-heart-fill"></i> Wishlist
         <span class="tab-badge" id="wishlist-tab-count">0</span>
       </button>
-      <button class="main-tab-btn" id="tab-btn-swing" onclick="switchTab('swing')">
-        <i class="bi bi-graph-up-arrow"></i> Swing
-        <span class="tab-badge d-none" id="swing-alert-count">0</span>
-      </button>
       <button class="main-tab-btn" id="tab-btn-chat" onclick="switchTab('chat')">
         <i class="bi bi-robot"></i> AI Chat
         <span class="badge badge-new ms-1">NEW</span>
@@ -368,95 +364,6 @@
     <div class="row g-3" id="wishlist-grid"></div>
 
   </div><!-- /tab-wishlist -->
-
-
-  <!-- ══════════════════════════ TAB: SWING TRADING ════════════════════════ -->
-  <div id="tab-swing" class="tab-panel d-none">
-
-    <div class="section-header mb-3">
-      <h5 class="mb-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Swing Trading
-        <span class="badge bg-secondary ms-2" style="font-size:0.7rem;font-weight:500;">Positional</span>
-      </h5>
-      <p class="text-muted small mb-0 mt-1">Buy and hold for days–weeks. Tool monitors daily and signals when to exit.</p>
-    </div>
-
-    <!-- Settings bar -->
-    <div class="swing-settings-bar mb-3" id="swing-settings-bar">
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="text-muted small">Portfolio:</span>
-        <div class="input-group input-group-sm swing-input-group">
-          <span class="input-group-text">₹</span>
-          <input type="number" class="form-control" id="swing-portfolio-input" placeholder="100000" min="10000" step="10000">
-        </div>
-        <span class="text-muted small">Max positions:</span>
-        <select class="form-select form-select-sm swing-select" id="swing-maxpos-input">
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6" selected>6</option>
-          <option value="8">8</option>
-          <option value="10">10</option>
-        </select>
-        <button class="btn btn-sm btn-primary" onclick="updateSwingSettings()">
-          <i class="bi bi-check2"></i> Apply
-        </button>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadSwing(true)">
-          <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Summary row -->
-    <div class="row g-2 mb-3" id="swing-summary-row">
-      <!-- rendered by renderSwingPortfolioSummary() -->
-    </div>
-
-    <!-- Loading / empty state -->
-    <div id="swing-loading" class="text-center py-5 d-none">
-      <div class="spinner-border text-primary" role="status"></div>
-      <div class="text-muted mt-2 small">Scoring all 80 stocks for positional setups…</div>
-    </div>
-
-    <!-- Open positions -->
-    <div id="swing-positions-section" class="mb-4">
-      <h6 class="fw-semibold mb-2"><i class="bi bi-briefcase-fill me-1 text-success"></i>Your Open Positions</h6>
-      <div id="swing-positions-empty" class="text-muted small fst-italic py-2 d-none">
-        No open positions yet. Add a position from the picks below.
-      </div>
-      <div id="swing-positions-table-wrap" class="table-responsive d-none">
-        <table class="table table-sm swing-table align-middle">
-          <thead>
-            <tr>
-              <th>Stock</th>
-              <th>Entry</th>
-              <th>CMP</th>
-              <th>Qty</th>
-              <th>Days</th>
-              <th>P&amp;L</th>
-              <th>Target</th>
-              <th>Stop</th>
-              <th>Signal</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="swing-positions-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Today's picks -->
-    <div id="swing-picks-section">
-      <h6 class="fw-semibold mb-2"><i class="bi bi-stars me-1 text-warning"></i>Today's Positional Picks
-        <span class="badge bg-light text-dark border ms-1" id="swing-picks-count" style="font-size:0.72rem;"></span>
-      </h6>
-      <div id="swing-picks-empty" class="text-muted small fst-italic py-2 d-none">
-        No BUY/STRONG BUY picks today with positional scoring. Check back during market hours.
-      </div>
-      <div class="row g-3" id="swing-picks-grid">
-        <!-- rendered by renderSwingPicks() -->
-      </div>
-    </div>
-
-  </div><!-- /tab-swing -->
 
 
   <!-- ════════════════════════════ TAB: AI CHAT ════════════════════════════ -->

@@ -24,7 +24,6 @@ from backend.data.options_fetcher import OptionsFetcher
 from backend.agents.options_agent import OptionsAgent
 from backend.utils.excel_exporter import ExcelExporter
 from backend.utils import wishlist_store
-from backend.utils import swing_store
 from backend.data import playwright_fetcher
 
 # ── Logging ──────────────────────────────────────────────
@@ -447,110 +446,6 @@ async def remove_from_wishlist(symbol: str):
 async def check_wishlist(symbol: str):
     """Check if a symbol is already wishlisted."""
     return {"symbol": symbol.upper(), "wishlisted": wishlist_store.exists(symbol)}
-
-
-# ── Swing / Positional routes ─────────────────────────────
-
-_LOCAL_USER = "local-dev-user"
-
-class SwingPositionItem(BaseModel):
-    symbol:       str
-    name:         str
-    entry_price:  float
-    quantity:     int
-    target_price: float
-    stop_loss:    float
-    score:        float = 0.0
-
-
-@app.get("/api/swing/picks")
-async def get_swing_picks(portfolio: int = 100_000, max_positions: int = 6):
-    """Score all stocks in positional mode and return top BUY/STRONG BUY picks."""
-    all_symbols = list(INDIAN_STOCKS.items())
-    all_syms    = [sym for sym, _ in all_symbols]
-    batch_data  = await stock_fetcher.get_batch_stock_data(all_syms)
-
-    tasks = []
-    for symbol, info in all_symbols:
-        sd = batch_data.get(symbol)
-        if not sd:
-            continue
-        sd["_portfolio"]     = portfolio
-        sd["_max_positions"] = max_positions
-        tasks.append(signal_agent.analyze(
-            symbol, info["name"], sd,
-            sector=info.get("sector", "Others"),
-            mode="positional",
-        ))
-
-    results = list(await asyncio.gather(*tasks)) if tasks else []
-
-    picks = [
-        r for r in results
-        if r.get("signal") in ("BUY", "STRONG BUY")
-        and r.get("score", 0) >= 55
-        and r.get("target_price")
-        and r.get("stop_loss")
-        and not r.get("error")
-    ]
-    picks.sort(key=lambda r: r.get("score", 0), reverse=True)
-    picks = picks[:8]
-
-    per_pos = round(portfolio / max_positions, 2)
-    for p in picks:
-        cur, tgt, sl = p.get("current_price", 0), p.get("target_price", 0), p.get("stop_loss", 0)
-        if cur and tgt and sl and (cur - sl) > 0:
-            p["rr_ratio"] = round((tgt - cur) / (cur - sl), 2)
-        p.setdefault("invest_amount", per_pos)
-
-    return {
-        "picks":         picks,
-        "total_scored":  len(results),
-        "total_passed":  len(picks),
-        "portfolio":     portfolio,
-        "max_positions": max_positions,
-        "per_position":  per_pos,
-        "last_updated":  datetime.now().strftime("%d %b %Y, %I:%M %p"),
-    }
-
-
-@app.get("/api/swing/positions")
-async def get_swing_positions():
-    """Return active swing positions (local dev uses a fixed user id)."""
-    positions = swing_store.get_active(_LOCAL_USER)
-    deployed  = sum(p.get("entry_price", 0) * p.get("quantity", 0) for p in positions)
-    total_pnl = sum(p.get("pnl", 0) for p in positions)
-    return {
-        "positions": positions,
-        "summary": {
-            "position_count": len(positions),
-            "deployed_value": round(deployed, 2),
-            "total_pnl":      round(total_pnl, 2),
-        },
-    }
-
-
-@app.post("/api/swing/positions")
-async def add_swing_position(item: SwingPositionItem):
-    """Open a new swing position."""
-    pos_id = swing_store.add_position(
-        _LOCAL_USER, item.symbol, item.name,
-        item.entry_price, item.quantity,
-        item.target_price, item.stop_loss,
-        item.score,
-    )
-    if not pos_id:
-        raise HTTPException(status_code=500, detail="Failed to save position")
-    return {"position_id": pos_id, "message": f"{item.symbol} position opened."}
-
-
-@app.delete("/api/swing/positions/{position_id}")
-async def close_swing_position(position_id: str, exit_price: float = 0.0):
-    """Close a swing position at the given exit price."""
-    closed = swing_store.close_position(_LOCAL_USER, position_id, exit_price)
-    if not closed:
-        raise HTTPException(status_code=404, detail="Position not found")
-    return {"message": "Position closed."}
 
 
 # ── Static files (CSS / JS) ──────────────────────────────
