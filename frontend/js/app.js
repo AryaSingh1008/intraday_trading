@@ -789,20 +789,24 @@ function stockCard(s, fromWishlist) {
   const sigClass = sig.toLowerCase().replace(/ /g, "-");
   const bandCls  = sig === "STRONG BUY"  ? "strong-buy"
                  : sig === "STRONG SELL" ? "strong-sell"
-                 : sig.toLowerCase();
+                 : sig === "BUY"         ? "buy"
+                 : sig === "SELL"        ? "sell"
+                 : "hold";
   const chg      = s.change_pct || 0;
   const chgCls   = chg >= 0 ? "up" : "down";
   const chgArrow = chg >= 0 ? "▲" : "▼";
+  const scoreWidth = Math.max(0, Math.min(100, Number(s.score) || 0));
   const scoreBar = '<div class="score-bar-track mt-1">'
-    + '<div class="score-bar-fill" style="width:' + (s.score||0) + '%;background:' + (s.signal_color||"#999") + '"></div>'
+    + '<div class="score-bar-fill" style="width:' + scoreWidth + '%;background:' + (s.signal_color||"#999") + '"></div>'
     + '</div>';
   const isWished = wishlistSymbols.has(s.symbol);
   const heartCls = isWished ? "wishlisted" : "";
   const heartIco = isWished ? "bi-heart-fill" : "bi-heart";
   const safeName = (s.name || s.symbol).replace(/'/g, "\\'");
+  const safeSym  = s.symbol.replace(/'/g, "\\'");
 
   const removeBtn = fromWishlist
-    ? '<button class="btn-remove-wish" onclick="removeFromWishlist(\'' + s.symbol + '\',event)">'
+    ? '<button class="btn-remove-wish" onclick="removeFromWishlist(\'' + safeSym + '\',event)">'
       + '<i class="bi bi-x-circle me-1"></i> Remove from Wishlist</button>'
     : "";
 
@@ -864,10 +868,10 @@ function stockCard(s, fromWishlist) {
   var sectorBadge = s.sector ? '<span class="sector-badge">' + s.sector + '</span>' : "";
 
   return '<div class="col-12 col-sm-6 col-lg-4">'
-    + '<div class="stock-card signal-' + sigClass + '" onclick="showDetail(\'' + s.symbol + '\')">'
+    + '<div class="stock-card signal-' + sigClass + '" onclick="showDetail(\'' + safeSym + '\')">'
     + '<div class="card-band ' + bandCls + '"></div>'
     + '<button class="btn-heart ' + heartCls + '" id="heart-' + s.symbol + '"'
-    + ' onclick="toggleWishlist(\'' + s.symbol + '\',\'' + safeName + '\',event)">'
+    + ' onclick="toggleWishlist(\'' + safeSym + '\',\'' + safeName + '\',event)">'
     + '<i class="bi ' + heartIco + '"></i></button>'
     + '<div class="card-body-inner">'
     + '<div class="d-flex justify-content-between align-items-start mb-2">'
@@ -1026,7 +1030,7 @@ async function showDetail(symbol) {
     renderModalChart(s);
 
     const rEl = document.getElementById("modal-reasons");
-    if (rEl) rEl.innerHTML = (s.reasons||[]).map(function(r) { return "<li>" + r + "</li>"; }).join("");
+    if (rEl) rEl.innerHTML = (s.reasons||[]).map(function(r) { return "<li>" + _escHtml(String(r)) + "</li>"; }).join("");
 
     // ── AI Analysis section ──────────────────────────────────────────────────
     _renderAIAnalysis(s);
@@ -1082,7 +1086,7 @@ function _renderAIAnalysis(s) {
   if (flagsWrap && flagsList) {
     if (s.ai_risk_flags && s.ai_risk_flags.length > 0) {
       flagsWrap.style.display = "block";
-      flagsList.innerHTML = s.ai_risk_flags.map(function(f) { return "<li>" + f + "</li>"; }).join("");
+      flagsList.innerHTML = s.ai_risk_flags.map(function(f) { return "<li>" + _escHtml(String(f)) + "</li>"; }).join("");
     } else {
       flagsWrap.style.display = "none";
     }
@@ -1094,7 +1098,7 @@ function _renderAIAnalysis(s) {
   if (contrWrap && contrList) {
     if (s.ai_contradictions && s.ai_contradictions.length > 0) {
       contrWrap.style.display = "block";
-      contrList.innerHTML = s.ai_contradictions.map(function(f) { return "<li>" + f + "</li>"; }).join("");
+      contrList.innerHTML = s.ai_contradictions.map(function(f) { return "<li>" + _escHtml(String(f)) + "</li>"; }).join("");
     } else {
       contrWrap.style.display = "none";
     }
@@ -1470,11 +1474,12 @@ function renderGapScanner() {
     .slice(0, 10);
 
   strip.innerHTML = sorted.map(function(s) {
-    const chg   = s.change_pct || 0;
-    const isUp  = chg >= 0;
-    const cls   = isUp ? "gp-up" : "gp-down";
-    const arrow = isUp ? "▲" : "▼";
-    return '<span class="gap-pill ' + cls + '" onclick="showDetail(\'' + s.symbol + '\')" title="' + (s.name||s.symbol) + '">'
+    const chg    = s.change_pct || 0;
+    const isUp   = chg >= 0;
+    const cls    = isUp ? "gp-up" : "gp-down";
+    const arrow  = isUp ? "▲" : "▼";
+    const safeSym = s.symbol.replace(/'/g, "\\'");
+    return '<span class="gap-pill ' + cls + '" onclick="showDetail(\'' + safeSym + '\')" title="' + (s.name||s.symbol) + '">'
       + '<span class="gp-sym">' + s.symbol.replace(".NS","") + '</span>'
       + '<span class="gp-chg">' + arrow + ' ' + Math.abs(chg).toFixed(2) + '%</span>'
       + '<span class="gp-price">₹' + fmt(s.current_price) + '</span>'
@@ -1545,7 +1550,8 @@ function renderSignalStats() {
     ? '<div class="sig-top-picks">'
         + '<span class="stp-label">🏆 Top picks:</span>'
         + top5Buy.map(function(s) {
-            return '<span class="top-pick-chip" onclick="showDetail(\'' + s.symbol + '\')">'
+            const safeSym = s.symbol.replace(/'/g, "\\'");
+            return '<span class="top-pick-chip" onclick="showDetail(\'' + safeSym + '\')">'
               + s.symbol.replace(".NS","") + ' <strong>' + (s.score||0) + '</strong></span>';
           }).join("")
       + '</div>'

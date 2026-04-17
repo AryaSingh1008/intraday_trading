@@ -34,15 +34,15 @@ def _pcr_signal(pcr: Optional[float], symbol: str = "") -> Tuple[str, str]:
 
     if pcr > bull_thr:
         return "BULLISH", (
-            f"Put-Call Ratio is {pcr:.2f} (above {bull_thr}) — more traders are "
-            f"buying PUT protection, which usually means the market could RISE. Bullish sign."
+            f"Put-Call Ratio is {pcr:.2f} (above {bull_thr}) — heavy put buying signals "
+            f"market fear/hedging. Contrarian indicator: extreme pessimism often precedes a RISE. Bullish sign."
         )
     if pcr < bear_thr:
         return "BEARISH", (
-            f"Put-Call Ratio is {pcr:.2f} (below {bear_thr}) — more traders are "
-            f"buying CALLs, which can mean the market is overbought and might FALL. Bearish sign."
+            f"Put-Call Ratio is {pcr:.2f} (below {bear_thr}) — heavy call buying signals "
+            f"market complacency/euphoria. Contrarian indicator: excessive optimism often precedes a FALL. Bearish sign."
         )
-    return "NEUTRAL", f"Put-Call Ratio is {pcr:.2f} — balanced. Market is undecided. Hold and watch."
+    return "NEUTRAL", f"Put-Call Ratio is {pcr:.2f} — balanced put/call activity. Market is undecided. Hold and watch."
 
 
 def _max_pain(chain: List[Dict]) -> Optional[float]:
@@ -149,9 +149,9 @@ class OptionsAgent:
         # ── IV Percentile ─────────────────────────────────────────────────────
         iv_percentile: Optional[float] = None
         if avg_iv is not None and source != "synthetic":
-            iv_percentile = iv_history_store.get_iv_percentile(symbol, avg_iv)
-            # Record today's reading for future percentile calculations
+            # Record today's reading FIRST so it's included in today's percentile
             iv_history_store.append_iv(symbol, avg_iv)
+            iv_percentile = iv_history_store.get_iv_percentile(symbol, avg_iv)
 
         # Build IV advice (use percentile if we have enough history, else absolute)
         if iv_percentile is not None:

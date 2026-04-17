@@ -97,8 +97,10 @@ class SignalAgent:
             nifty_hist = stock_data.get("nifty_hist")
             if nifty_hist is not None and len(nifty_hist) >= 30:
                 try:
-                    stock_return = float(hist["Close"].iloc[-1])      / float(hist["Close"].iloc[-30])      - 1
-                    nifty_return = float(nifty_hist.iloc[-1].iloc[0] if hasattr(nifty_hist.iloc[-1], 'iloc') else nifty_hist.iloc[-1]) / float(nifty_hist.iloc[-30].iloc[0] if hasattr(nifty_hist.iloc[-30], 'iloc') else nifty_hist.iloc[-30]) - 1
+                    stock_return = float(hist["Close"].iloc[-1]) / float(hist["Close"].iloc[-30]) - 1
+                    # Handle both Series (single column) and DataFrame (multi-level) from yfinance
+                    nifty_s = nifty_hist.iloc[:, 0] if hasattr(nifty_hist, "iloc") and nifty_hist.ndim == 2 else nifty_hist
+                    nifty_return = float(nifty_s.iloc[-1]) / float(nifty_s.iloc[-30]) - 1
                     # Use (1+stock) / (1+nifty) — correct RS formula in all market directions.
                     # Simple return ratio (stock/nifty) inverts when nifty is negative,
                     # wrongly penalising stocks that fell less than the market.
@@ -135,7 +137,12 @@ class SignalAgent:
             stop_loss        = None
             target_buy_price = None
 
-            if _atr and _bb_upper and _bb_lower:
+            # _bb_upper/_bb_lower can be None (insufficient data) — guard both None and NaN
+            _bb_valid = (
+                _bb_upper is not None and _bb_lower is not None
+                and not math.isnan(_bb_upper) and not math.isnan(_bb_lower)
+            )
+            if _atr and _bb_valid:
                 pivot_r1 = _pivots.get("r1") if _pivots else None
                 pivot_s1 = _pivots.get("s1") if _pivots else None
 
@@ -148,27 +155,37 @@ class SignalAgent:
                     tgt_strong, sl_strong = 2.5, 1.5
                     tgt_buy,    sl_buy    = 1.5, 1.0
 
+                def _safe_min(*vals):
+                    """min() over candidates, ignoring None and NaN. Falls back to last arg."""
+                    candidates = [v for v in vals if v is not None and not (isinstance(v, float) and math.isnan(v))]
+                    return min(candidates) if candidates else vals[-1]
+
+                def _safe_max(*vals):
+                    """max() over candidates, ignoring None and NaN. Falls back to last arg."""
+                    candidates = [v for v in vals if v is not None and not (isinstance(v, float) and math.isnan(v))]
+                    return max(candidates) if candidates else vals[-1]
+
                 if signal == "STRONG BUY":
                     raw_target = current_price + tgt_strong * _atr
                     raw_stop   = current_price - sl_strong  * _atr
-                    _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
-                    _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
+                    _t = _safe_min(_bb_upper, pivot_r1, raw_target)
+                    _s = _safe_max(_bb_lower, pivot_s1, raw_stop)
                     target_price = round(_t if _t > current_price else raw_target, 2)
                     stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "BUY":
                     raw_target = current_price + tgt_buy * _atr
                     raw_stop   = current_price - sl_buy   * _atr
-                    _t = min(filter(None, [_bb_upper, pivot_r1, raw_target]))
-                    _s = max(filter(None, [_bb_lower, pivot_s1, raw_stop]))
+                    _t = _safe_min(_bb_upper, pivot_r1, raw_target)
+                    _s = _safe_max(_bb_lower, pivot_s1, raw_stop)
                     target_price = round(_t if _t > current_price else raw_target, 2)
                     stop_loss    = round(_s if _s < current_price else raw_stop, 2)
                 elif signal == "SELL":
                     raw_target = current_price - tgt_buy * _atr
-                    _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
+                    _t = _safe_max(_bb_lower, pivot_s1, raw_target)
                     target_buy_price = round(_t if _t < current_price else raw_target, 2)
                 elif signal == "STRONG SELL":
                     raw_target = current_price - tgt_strong * _atr
-                    _t = max(filter(None, [_bb_lower, pivot_s1, raw_target]))
+                    _t = _safe_max(_bb_lower, pivot_s1, raw_target)
                     target_buy_price = round(_t if _t < current_price else raw_target, 2)
 
             # ── Position sizing (2% risk rule) ────────────────────────────────
@@ -188,9 +205,12 @@ class SignalAgent:
                     if risk_per_share > 0:
                         qty_by_risk  = int(max_risk / risk_per_share)
                         qty_by_cap   = int(max_per_pos / current_price)
-                        suggested_qty = max(1, min(qty_by_risk, qty_by_cap))
-                        risk_amount   = round(suggested_qty * risk_per_share, 2)
-                        invest_amount = round(suggested_qty * current_price, 2)
+                        # Don't force 1 share — if 2% risk rule gives 0, it means
+                        # the stock is too volatile relative to portfolio size.
+                        suggested_qty = min(qty_by_risk, qty_by_cap) if qty_by_risk > 0 else None
+                        if suggested_qty:
+                            risk_amount   = round(suggested_qty * risk_per_share, 2)
+                            invest_amount = round(suggested_qty * current_price, 2)
                 except Exception:
                     pass
 
@@ -352,6 +372,7 @@ class SignalAgent:
             "target_buy_price": None,
             "suggested_qty":    None,
             "risk_amount":      None,
+            "invest_amount":    None,
             "vwap":             None,
             "support_level":    None,
             "resistance_level": None,

@@ -12,6 +12,7 @@ import json
 import os
 import time
 import uuid
+from datetime import date
 from decimal import Decimal
 
 import boto3
@@ -107,12 +108,23 @@ def handler(event, context):
         cur_price   = cur.get("current", 0.0)
         prev_close  = cur.get("prev_close", 0.0)
 
-        invested      = round(buy_price * quantity, 2)
-        cur_value     = round(cur_price * quantity, 2) if cur_price else None
-        total_gain    = round(cur_value - invested, 2) if cur_value is not None else None
-        total_gain_pct= round((total_gain / invested) * 100, 2) if (total_gain is not None and invested) else None
-        day_gain      = round((cur_price - prev_close) * quantity, 2) if (cur_price and prev_close) else None
-        day_gain_pct  = round(((cur_price - prev_close) / prev_close) * 100, 2) if (prev_close and cur_price) else None
+        invested       = round(buy_price * quantity, 2)
+        price_ok       = cur_price and cur_price > 0
+        cur_value      = round(cur_price * quantity, 2) if price_ok else None
+        total_gain     = round(cur_value - invested, 2) if cur_value is not None else None
+        total_gain_pct = round((total_gain / invested) * 100, 2) if (total_gain is not None and invested) else None
+        day_gain       = round((cur_price - prev_close) * quantity, 2) if (price_ok and prev_close) else None
+        day_gain_pct   = round(((cur_price - prev_close) / prev_close) * 100, 2) if (prev_close and price_ok) else None
+
+        # Days held since buy date
+        days_held = None
+        buy_date_str = h.get("buy_date", "")
+        if buy_date_str:
+            try:
+                buy_dt   = date.fromisoformat(buy_date_str)
+                days_held = (date.today() - buy_dt).days
+            except Exception:
+                pass
 
         enriched.append({
             "holding_id":     h["holding_id"],
@@ -120,8 +132,9 @@ def handler(event, context):
             "name":           h.get("name", sym),
             "buy_price":      buy_price,
             "quantity":       quantity,
-            "buy_date":       h.get("buy_date", ""),
-            "current_price":  cur_price if cur_price else None,
+            "buy_date":       buy_date_str,
+            "days_held":      days_held,
+            "current_price":  cur_price if price_ok else None,
             "prev_close":     prev_close if prev_close else None,
             "invested":       invested,
             "current_value":  cur_value,
@@ -129,6 +142,7 @@ def handler(event, context):
             "total_gain_pct": total_gain_pct,
             "day_gain":       day_gain,
             "day_gain_pct":   day_gain_pct,
+            "price_available": price_ok,
         })
 
     summary = _compute_summary(enriched)
@@ -143,9 +157,10 @@ def _fetch_prices(symbols: set) -> dict:
         return result
     try:
         import yfinance as yf
+        sym_list = list(symbols)
         # Batch download all symbols at once (much faster than one-by-one)
         data = yf.download(
-            list(symbols),
+            sym_list,
             period="2d",
             group_by="ticker",
             threads=True,
@@ -158,12 +173,19 @@ def _fetch_prices(symbols: set) -> dict:
         for sym in symbols:
             try:
                 if len(symbols) == 1:
-                    sym_data = data
+                    # Single-ticker: newer yfinance still returns MultiIndex columns
+                    # e.g. ("Close", "RELIANCE.NS") — flatten to a plain Series
+                    if hasattr(data.columns, "levels"):
+                        sym_data = data.xs("Close", axis=1, level=0) if "Close" in data.columns.get_level_values(0) else None
+                        if sym_data is not None and hasattr(sym_data, "squeeze"):
+                            sym_data = sym_data.squeeze()  # DataFrame → Series
+                    else:
+                        sym_data = data["Close"] if "Close" in data.columns else None
                 else:
-                    sym_data = data[sym] if sym in data.columns.get_level_values(0) else None
-                if sym_data is None or sym_data.empty:
+                    sym_data = data[sym]["Close"] if sym in data.columns.get_level_values(0) else None
+                if sym_data is None or (hasattr(sym_data, "empty") and sym_data.empty):
                     continue
-                closes = sym_data["Close"].dropna()
+                closes = sym_data.dropna()
                 if len(closes) >= 2:
                     result[sym] = {"current": float(closes.iloc[-1]), "prev_close": float(closes.iloc[-2])}
                 elif len(closes) == 1:
@@ -176,23 +198,30 @@ def _fetch_prices(symbols: set) -> dict:
 
 
 def _compute_summary(holdings: list) -> dict:
-    total_invested = round(sum(h["invested"] for h in holdings), 2)
-    current_value  = round(sum(h["current_value"] or h["invested"] for h in holdings), 2)
-    total_gain     = round(current_value - total_invested, 2)
-    total_gain_pct = round((total_gain / total_invested) * 100, 2) if total_invested else 0.0
-    day_gain       = round(sum(h["day_gain"] or 0 for h in holdings), 2)
+    total_invested  = round(sum(h["invested"] for h in holdings), 2)
+    # Only include holdings where we actually got a live price — don't substitute
+    # invested cost for missing price (that hides real gains/losses on outages).
+    priced = [h for h in holdings if h.get("price_available")]
+    unpriced_count  = len(holdings) - len(priced)
+    current_value   = round(sum(h["current_value"] for h in priced), 2) if priced else None
+    priced_invested = round(sum(h["invested"]       for h in priced), 2)
+    total_gain      = round(current_value - priced_invested, 2) if current_value is not None else None
+    total_gain_pct  = round((total_gain / priced_invested) * 100, 2) if (total_gain is not None and priced_invested) else None
+    day_gain        = round(sum(h["day_gain"] or 0 for h in priced), 2) if priced else None
     return {
-        "total_invested":  total_invested,
-        "current_value":   current_value,
-        "total_gain":      total_gain,
-        "total_gain_pct":  total_gain_pct,
-        "day_gain":        day_gain,
+        "total_invested":   total_invested,
+        "current_value":    current_value,
+        "total_gain":       total_gain,
+        "total_gain_pct":   total_gain_pct,
+        "day_gain":         day_gain,
+        "unpriced_count":   unpriced_count,   # UI can show "N holdings unavailable"
     }
 
 
 def _empty_summary() -> dict:
     return {"total_invested": 0, "current_value": 0,
-            "total_gain": 0, "total_gain_pct": 0, "day_gain": 0}
+            "total_gain": 0, "total_gain_pct": 0, "day_gain": 0,
+            "unpriced_count": 0}
 
 
 def _json(data: dict, status: int = 200):

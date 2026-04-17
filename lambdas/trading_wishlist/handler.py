@@ -66,9 +66,68 @@ def handler(event, context):
     response = table.query(
         KeyConditionExpression=boto3.dynamodb.conditions.Key("user_id").eq(user_id)
     )
-    items = [{"symbol": i["symbol"], "name": i.get("name", i["symbol"])}
-             for i in response.get("Items", [])]
+    raw_items = response.get("Items", [])
+    items     = [{"symbol": i["symbol"], "name": i.get("name", i["symbol"])}
+                 for i in raw_items]
+
+    # Enrich with live price data (best-effort — silent on failure)
+    if items:
+        prices = _fetch_prices({i["symbol"] for i in items})
+        for item in items:
+            p = prices.get(item["symbol"], {})
+            cur        = p.get("current")
+            prev_close = p.get("prev_close")
+            item["current_price"] = cur
+            item["prev_close"]    = prev_close
+            if cur and prev_close and prev_close > 0:
+                item["change_pct"] = round((cur - prev_close) / prev_close * 100, 2)
+            else:
+                item["change_pct"] = None
+
     return _json({"wishlist": items})
+
+
+def _fetch_prices(symbols: set) -> dict:
+    """Fetch current price and previous close for a set of symbols.
+    Returns {symbol: {current, prev_close}} — zeros on any failure."""
+    result = {sym: {"current": None, "prev_close": None} for sym in symbols}
+    if not symbols:
+        return result
+    try:
+        import yfinance as yf
+        sym_list = list(symbols)
+        data = yf.download(
+            sym_list,
+            period="2d",
+            group_by="ticker",
+            threads=True,
+            timeout=8,
+            progress=False,
+        )
+        if data.empty:
+            return result
+        for sym in symbols:
+            try:
+                if len(symbols) == 1:
+                    # Single ticker — newer yfinance returns MultiIndex columns
+                    if hasattr(data.columns, "levels"):
+                        col_data = data.xs("Close", axis=1, level=0) if "Close" in data.columns.get_level_values(0) else None
+                        closes   = col_data.squeeze().dropna() if col_data is not None else None
+                    else:
+                        closes = data["Close"].dropna() if "Close" in data.columns else None
+                else:
+                    closes = data[sym]["Close"].dropna() if sym in data.columns.get_level_values(0) else None
+                if closes is None or len(closes) == 0:
+                    continue
+                result[sym] = {
+                    "current":    float(closes.iloc[-1]),
+                    "prev_close": float(closes.iloc[-2]) if len(closes) >= 2 else float(closes.iloc[-1]),
+                }
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return result
 
 
 def _json(data: dict, status: int = 200):

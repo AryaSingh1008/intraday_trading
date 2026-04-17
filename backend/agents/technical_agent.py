@@ -244,7 +244,7 @@ class TechnicalAgent:
                 ema9  = close.ewm(span=9,  adjust=False).mean()
                 ema21 = close.ewm(span=21, adjust=False).mean()
                 curr_diff = float(ema9.iloc[-1] - ema21.iloc[-1])
-                prev_diff = float(ema9.iloc[-4] - ema21.iloc[-4]) if len(close) > 4 else curr_diff
+                prev_diff = float(ema9.iloc[-2] - ema21.iloc[-2]) if len(close) > 2 else curr_diff
 
                 if curr_diff > 0:
                     if prev_diff <= 0:
@@ -441,10 +441,13 @@ class TechnicalAgent:
         ema_slow    = series.ewm(span=slow,   adjust=False).mean()
         macd_line   = ema_fast - ema_slow
         signal_line = macd_line.ewm(span=signal, adjust=False).mean()
-        # 4-day lookback for crossover detection (same window as EMA crossover)
-        prev_idx    = -4 if len(macd_line) >= 4 else -1
-        prev_macd   = float(macd_line.iloc[prev_idx])
-        prev_signal = float(signal_line.iloc[prev_idx])
+        # Use dropna to avoid NaN in recent bars, then take the second-to-last bar
+        _macd_clean   = macd_line.dropna()
+        _signal_clean = signal_line.dropna()
+        if len(_macd_clean) < 2 or len(_signal_clean) < 2:
+            return float(macd_line.iloc[-1]), float(signal_line.iloc[-1]), None, None
+        prev_macd   = float(_macd_clean.iloc[-2])
+        prev_signal = float(_signal_clean.iloc[-2])
         return float(macd_line.iloc[-1]), float(signal_line.iloc[-1]), prev_macd, prev_signal
 
     @staticmethod
@@ -456,7 +459,11 @@ class TechnicalAgent:
         std     = rolling.std()
         upper   = middle + num_std * std
         lower   = middle - num_std * std
-        return float(upper.iloc[-1]), float(middle.iloc[-1]), float(lower.iloc[-1])
+        u, m, l = float(upper.iloc[-1]), float(middle.iloc[-1]), float(lower.iloc[-1])
+        import math
+        if math.isnan(u) or math.isnan(m) or math.isnan(l):
+            return None, None, None
+        return u, m, l
 
     @staticmethod
     def _atr(high: pd.Series, low: pd.Series, close: pd.Series,
@@ -586,9 +593,10 @@ class TechnicalAgent:
             cum_tp_vol = 0.0
             cum_vol    = 0.0
             for bar in intraday_data:
-                h = bar.get("high", bar.get("price", 0))
-                l = bar.get("low",  bar.get("price", 0))
                 c = bar.get("close", bar.get("price", 0))
+                # If H/L are missing, use close — avoids silent averaging error
+                h = bar.get("high") if bar.get("high") is not None else c
+                l = bar.get("low")  if bar.get("low")  is not None else c
                 v = bar.get("volume", 0)
                 if v > 0:
                     typical_price = (h + l + c) / 3.0
