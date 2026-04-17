@@ -1,0 +1,58 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install --upgrade pip --quiet
+
+  pre_build:
+    commands:
+      - echo "Lambda layer build started at $(date)"
+      - python --version
+
+  build:
+    commands:
+      # Build all 4 Lambda layers using the existing cross-compile script
+      - chmod +x infrastructure/build_layers.sh
+      - cd infrastructure && bash build_layers.sh && cd ..
+
+      # Run tests if any exist (non-fatal — missing tests are not an error)
+      - |
+        if find lambdas -name "test_*.py" -o -name "*_test.py" 2>/dev/null | grep -q .; then
+          pip install pytest --quiet
+          python -m pytest lambdas/ -v --tb=short
+        else
+          echo "No test files found — skipping pytest"
+        fi
+
+      # Pre-package every Lambda handler directory into a ZIP.
+      # The shared/ package is included in each ZIP so handlers can import it.
+      - mkdir -p infrastructure/layers/zips
+      - |
+        for dir in lambdas/trading_*/; do
+          name=$(basename "$dir")
+          zip_path="infrastructure/layers/zips/${name}.zip"
+          (cd lambdas && zip -r9q "../${zip_path}" "${name}/" shared/)
+          echo "Packaged ${zip_path}"
+        done
+
+  post_build:
+    commands:
+      - echo "Layer build complete at $(date)"
+      - ls -lh infrastructure/layers/*.zip 2>/dev/null || true
+      - ls -lh infrastructure/layers/zips/*.zip
+
+artifacts:
+  files:
+    - infrastructure/layers/**/*
+    - infrastructure/terraform/**/*
+    - lambdas/**/*
+    - backend/**/*
+    - prompts/**/*
+  discard-paths: no
+
+cache:
+  paths:
+    - /root/.cache/pip/**/*

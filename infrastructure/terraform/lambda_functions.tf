@@ -115,6 +115,8 @@ resource "aws_lambda_function" "stocks_signal" {
 
   layers = compact([local.heavy_layer_arn, local.nlp_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = merge(local.common_env, {
       FUNCTION_TYPE = "stocks_signal"
@@ -135,6 +137,8 @@ resource "aws_lambda_function" "options_analysis" {
   memory_size      = 512
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = merge(local.common_env, {
@@ -157,6 +161,8 @@ resource "aws_lambda_function" "options_refresh" {
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = merge(local.common_env, {
       FUNCTION_TYPE = "options_refresh"
@@ -178,6 +184,8 @@ resource "aws_lambda_function" "bedrock_technical_tool" {
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = merge(local.common_env, {
       FUNCTION_TYPE = "bedrock_technical_tool"
@@ -198,6 +206,8 @@ resource "aws_lambda_function" "bedrock_options_tool" {
   memory_size      = 512
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = merge(local.common_env, {
@@ -224,6 +234,8 @@ resource "aws_lambda_function" "news_sentiment" {
 
   layers = compact([local.nlp_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = local.common_env
   }
@@ -243,6 +255,8 @@ resource "aws_lambda_function" "bedrock_sentiment_tool" {
 
   layers = compact([local.nlp_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = local.common_env
   }
@@ -261,6 +275,8 @@ resource "aws_lambda_function" "excel_export" {
   memory_size      = 256
 
   layers = compact([local.export_layer_arn, local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = local.common_env
@@ -285,6 +301,8 @@ resource "aws_lambda_function" "portfolio" {
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = local.common_env
   }
@@ -303,6 +321,8 @@ resource "aws_lambda_function" "wishlist" {
   memory_size      = 128
 
   layers = compact([local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = local.common_env
@@ -323,6 +343,8 @@ resource "aws_lambda_function" "market_status" {
 
   layers = compact([local.heavy_layer_arn, local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = local.common_env
   }
@@ -341,6 +363,8 @@ resource "aws_lambda_function" "cache_clear" {
   memory_size      = 128
 
   layers = compact([local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = local.common_env
@@ -361,6 +385,8 @@ resource "aws_lambda_function" "fii_dii" {
 
   layers = compact([local.backend_layer_arn])
 
+  tracing_config { mode = "Active" }
+
   environment {
     variables = local.common_env
   }
@@ -379,6 +405,8 @@ resource "aws_lambda_function" "bedrock_chat" {
   memory_size      = 256
 
   layers = compact([local.backend_layer_arn])
+
+  tracing_config { mode = "Active" }
 
   environment {
     variables = merge(local.common_env, {

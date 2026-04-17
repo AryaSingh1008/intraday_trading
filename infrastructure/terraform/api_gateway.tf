@@ -41,7 +41,7 @@ resource "aws_apigatewayv2_stage" "default" {
 resource "aws_apigatewayv2_integration" "stocks_signal" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.stocks_signal.invoke_arn
+  integration_uri        = aws_lambda_alias.stocks_signal_live.invoke_arn
   payload_format_version = "2.0"
   timeout_milliseconds   = 29000   # API GW HTTP v2 max is 30s
 }
@@ -49,7 +49,7 @@ resource "aws_apigatewayv2_integration" "stocks_signal" {
 resource "aws_apigatewayv2_integration" "options_analysis" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.options_analysis.invoke_arn
+  integration_uri        = aws_lambda_alias.options_analysis_live.invoke_arn
   payload_format_version = "2.0"
   timeout_milliseconds   = 30000
 }

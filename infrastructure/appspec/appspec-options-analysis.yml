@@ -1,0 +1,22 @@
+# AppSpec template for trading-options-analysis CodeDeploy deployment.
+# The buildspec-terraform-apply.yml inlines this with real ARNs at deploy time.
+# This file is kept for reference and manual deployments via the AWS console.
+#
+# To deploy manually:
+#   ACCOUNT=<your-account-id>
+#   CURRENT_VER=<existing-alias-version>
+#   NEW_VER=<newly-published-version>
+#   aws deploy create-deployment \
+#     --application-name trading-lambda-app \
+#     --deployment-group-name trading-options-analysis-dg \
+#     --revision "revisionType=AppSpecContent,appSpecContent={content=$(cat this-file | \
+#         sed "s/CURRENT_VERSION/${CURRENT_VER}/g; s/TARGET_VERSION/${NEW_VER}/g; s/ACCOUNT_ID/${ACCOUNT}/g")}"
+version: 0.0
+Resources:
+  - TradingOptionsAnalysis:
+      Type: AWS::Lambda::Function
+      Properties:
+        Name: "trading-options-analysis"
+        Alias: "live"
+        CurrentVersion: "arn:aws:lambda:us-east-1:ACCOUNT_ID:function:trading-options-analysis:CURRENT_VERSION"
+        TargetVersion: "arn:aws:lambda:us-east-1:ACCOUNT_ID:function:trading-options-analysis:TARGET_VERSION"

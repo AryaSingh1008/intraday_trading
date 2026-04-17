@@ -1,0 +1,91 @@
+version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.5.7"
+    TF_DIR: "infrastructure/terraform"
+    TF_VAR_aws_region: "us-east-1"
+    TF_VAR_project_name: "trading"
+    TF_VAR_environment: "prod"
+    TF_VAR_lambda_layers_built: "true"
+    AWS_REGION: "us-east-1"
+    CODEDEPLOY_APP: "trading-lambda-app"
+  parameter-store:
+    TF_STATE_BUCKET: /trading/tf-state-bucket
+    TF_VAR_aws_account_id: /trading/aws-account-id
+
+phases:
+  install:
+    commands:
+      - |
+        wget -q "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip -q "terraform_${TF_VERSION}_linux_amd64.zip"
+        mv terraform /usr/local/bin/
+        terraform version
+
+  pre_build:
+    commands:
+      - cd ${TF_DIR}
+      - |
+        terraform init \
+          -backend-config="bucket=${TF_STATE_BUCKET}" \
+          -backend-config="key=trading/terraform.tfstate" \
+          -backend-config="region=us-east-1" \
+          -input=false
+
+  build:
+    commands:
+      - cd ${TF_DIR}
+      - terraform apply -auto-approve -input=false tfplan
+      - echo "Terraform apply complete"
+
+      # Publish a new numbered version for each CodeDeploy-managed function.
+      # CodeDeploy shifts traffic between the current alias version and this new one.
+      - cd ${CODEBUILD_SRC_DIR}
+      - |
+        for fn in trading-stocks-signal trading-options-analysis; do
+          NEW_VER=$(aws lambda publish-version \
+            --function-name "${fn}" \
+            --region "${AWS_REGION}" \
+            --query Version --output text)
+          echo "${fn} new version: ${NEW_VER}"
+
+          # Resolve the current alias version (the live production version)
+          CURRENT_VER=$(aws lambda get-alias \
+            --function-name "${fn}" \
+            --name live \
+            --region "${AWS_REGION}" \
+            --query FunctionVersion --output text 2>/dev/null || echo "\$LATEST")
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          FN_ARN="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${fn}"
+
+          # Derive deployment group name from function name
+          DG_NAME="${fn}-dg"
+
+          APPSPEC=$(cat <<SPEC
+        version: 0.0
+        Resources:
+          - ${fn}:
+              Type: AWS::Lambda::Function
+              Properties:
+                Name: "${fn}"
+                Alias: "live"
+                CurrentVersion: "${FN_ARN}:${CURRENT_VER}"
+                TargetVersion: "${FN_ARN}:${NEW_VER}"
+        SPEC
+        )
+
+          aws deploy create-deployment \
+            --application-name "${CODEDEPLOY_APP}" \
+            --deployment-group-name "${DG_NAME}" \
+            --revision "revisionType=AppSpecContent,appSpecContent={content='${APPSPEC}'}" \
+            --region "${AWS_REGION}" \
+            --description "Deployed via CodePipeline build ${CODEBUILD_BUILD_ID}"
+
+          echo "CodeDeploy deployment initiated for ${fn}"
+        done
+
+  post_build:
+    commands:
+      - echo "Terraform apply and CodeDeploy deployments complete at $(date)"

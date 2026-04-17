@@ -1,0 +1,177 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SSM Parameters — injected into buildspecs via parameter-store env vars.
+# Set values once manually after first terraform apply, then ignore_changes
+# prevents Terraform from overwriting them on subsequent applies.
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_ssm_parameter" "tf_state_bucket" {
+  name  = "/trading/tf-state-bucket"
+  type  = "String"
+  value = "REPLACE_WITH_YOUR_TF_STATE_BUCKET_NAME"
+
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "account_id_param" {
+  name  = "/trading/aws-account-id"
+  type  = "SecureString"
+  value = local.account_id
+
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "frontend_bucket_param" {
+  name  = "/trading/frontend-bucket"
+  type  = "String"
+  value = local.frontend_bucket_name
+
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "cloudfront_dist_id_param" {
+  name  = "/trading/cloudfront-dist-id"
+  type  = "String"
+  value = aws_cloudfront_distribution.main.id
+
+  lifecycle { ignore_changes = [value] }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CodeBuild: Build Lambda Layers
+# Runs build_layers.sh, zips all handler directories, runs pytest if tests exist.
+# Uses MEDIUM compute because pip cross-compiling the heavy layer takes 6-8 min.
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_codebuild_project" "build_layers" {
+  name          = "${local.prefix}-build-layers"
+  description   = "Build Lambda layers and package handler ZIPs"
+  build_timeout = 20
+  service_role  = aws_iam_role.codebuild.arn
+
+  environment {
+    compute_type                = "BUILD_GENERAL1_MEDIUM"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infrastructure/buildspec/buildspec-layers.yml"
+  }
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  cache {
+    type     = "S3"
+    location = "${aws_s3_bucket.pipeline_artifacts.bucket}/cache/pip"
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = "/aws/codebuild/${local.prefix}-build-layers"
+      status     = "ENABLED"
+    }
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CodeBuild: Terraform Plan
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_codebuild_project" "terraform_plan" {
+  name          = "${local.prefix}-terraform-plan"
+  description   = "Run terraform plan and store tfplan artifact"
+  build_timeout = 15
+  service_role  = aws_iam_role.codebuild.arn
+
+  environment {
+    compute_type                = "BUILD_GENERAL1_SMALL"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infrastructure/buildspec/buildspec-terraform-plan.yml"
+  }
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = "/aws/codebuild/${local.prefix}-terraform-plan"
+      status     = "ENABLED"
+    }
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CodeBuild: Terraform Apply
+# Applies tfplan, publishes Lambda versions, and triggers CodeDeploy.
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_codebuild_project" "terraform_apply" {
+  name          = "${local.prefix}-terraform-apply"
+  description   = "Apply terraform plan, publish Lambda versions, trigger CodeDeploy"
+  build_timeout = 30
+  service_role  = aws_iam_role.codebuild.arn
+
+  environment {
+    compute_type                = "BUILD_GENERAL1_SMALL"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infrastructure/buildspec/buildspec-terraform-apply.yml"
+  }
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = "/aws/codebuild/${local.prefix}-terraform-apply"
+      status     = "ENABLED"
+    }
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CodeBuild: Frontend Deploy
+# Syncs frontend/ to S3 with correct cache-control and invalidates CloudFront.
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_codebuild_project" "frontend_deploy" {
+  name          = "${local.prefix}-frontend-deploy"
+  description   = "Sync frontend to S3 and invalidate CloudFront distribution"
+  build_timeout = 10
+  service_role  = aws_iam_role.codebuild.arn
+
+  environment {
+    compute_type                = "BUILD_GENERAL1_SMALL"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infrastructure/buildspec/buildspec-frontend.yml"
+  }
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = "/aws/codebuild/${local.prefix}-frontend-deploy"
+      status     = "ENABLED"
+    }
+  }
+}
