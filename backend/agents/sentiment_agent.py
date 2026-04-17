@@ -25,6 +25,7 @@ import re
 from typing import List, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 
+import urllib.request
 import feedparser
 from email.utils import parsedate_to_datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -296,6 +297,15 @@ def _pattern_boost(text: str) -> float:
     return max(-0.8, min(0.8, boost))
 
 
+def _parse_feed(url: str, timeout: int = 8) -> "feedparser.FeedParserDict":
+    """Fetch and parse an RSS feed with a hard network timeout to prevent Lambda hangs."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            return feedparser.parse(response)
+    except Exception:
+        return feedparser.FeedParserDict()
+
+
 class SentimentAgent:
 
     async def get_news(self, symbol: Optional[str] = None) -> List[dict]:
@@ -318,7 +328,7 @@ class SentimentAgent:
 
         for url in urls:
             try:
-                feed = feedparser.parse(url)
+                feed = _parse_feed(url)
                 for entry in feed.entries[:8]:
                     title   = entry.get("title", "")
                     summary = entry.get("summary", "")
@@ -372,7 +382,7 @@ class SentimentAgent:
         for url in urls:
             authority = _source_authority(url)
             try:
-                feed = feedparser.parse(url)
+                feed = _parse_feed(url)
                 for entry in feed.entries[:5]:
                     title   = entry.get("title",   "")
                     summary = entry.get("summary", "")

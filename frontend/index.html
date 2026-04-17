@@ -258,6 +258,12 @@
       </div>
     </div>
 
+    <!-- Signal accuracy badge + FII/DII strip -->
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2 mt-1">
+      <span id="signal-accuracy-badge" class="badge bg-success fs-6 px-3 py-2" style="display:none"></span>
+      <span id="fii-dii-badge" class="badge fs-6 px-3 py-2" style="display:none;background:#1a237e;"></span>
+    </div>
+
     <!-- Summary cards -->
     <div id="summary-row" class="d-none">
       <div class="row g-3 mb-4" id="summary-cards"></div>
@@ -565,6 +571,9 @@
     <!-- Summary cards -->
     <div class="row g-3 mb-4" id="portfolio-summary"></div>
 
+    <!-- Sector concentration warning -->
+    <div id="portfolio-sector-warning" class="alert alert-warning py-2 mb-3 small" style="display:none"></div>
+
     <!-- Holdings table -->
     <div class="port-table-wrap">
       <table class="port-table">
@@ -623,12 +632,16 @@
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Price Chart</h5>
             <div class="chart-tf-btns" id="chart-tf-btns">
+              <button class="btn-tf" onclick="switchChartTF('5m', this)">5m</button>
               <button class="btn-tf active" onclick="switchChartTF('15m', this)">15m</button>
               <button class="btn-tf" onclick="switchChartTF('1h', this)">1H</button>
               <button class="btn-tf" onclick="switchChartTF('daily', this)">Daily</button>
             </div>
           </div>
-          <canvas id="modal-chart" height="120"></canvas>
+          <div style="display:flex;gap:8px;align-items:flex-start;">
+            <canvas id="modal-chart" height="120" style="flex:1;min-width:0;"></canvas>
+            <canvas id="volume-profile-chart" width="60" height="120" title="Volume Profile (price levels with most trading activity)"></canvas>
+          </div>
           <p class="text-muted small mt-1" id="chart-note"></p>
         </div>
 

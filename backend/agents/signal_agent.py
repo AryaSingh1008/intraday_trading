@@ -95,7 +95,7 @@ class SignalAgent:
             # ── Relative Strength vs NIFTY 50 ─────────────────────────────────
             rs_ratio = None
             nifty_hist = stock_data.get("nifty_hist")
-            if nifty_hist is not None and len(nifty_hist) >= 30:
+            if nifty_hist is not None and len(nifty_hist) >= 30 and "Close" in hist.columns:
                 try:
                     stock_return = float(hist["Close"].iloc[-1]) / float(hist["Close"].iloc[-30]) - 1
                     # Handle both Series (single column) and DataFrame (multi-level) from yfinance
@@ -223,6 +223,22 @@ class SignalAgent:
             except Exception:
                 pass
 
+            # ── Fibonacci retracement levels (from 52-week high/low) ──────────
+            fib_levels = {}
+            try:
+                h52 = stock_data.get("high_52w")
+                l52 = stock_data.get("low_52w")
+                if h52 and l52 and h52 > l52:
+                    diff = h52 - l52
+                    fib_levels = {
+                        "fib_236": round(h52 - 0.236 * diff, 2),
+                        "fib_382": round(h52 - 0.382 * diff, 2),
+                        "fib_500": round(h52 - 0.500 * diff, 2),
+                        "fib_618": round(h52 - 0.618 * diff, 2),
+                    }
+            except Exception:
+                pass
+
             return {
                 "symbol":           symbol,
                 "name":             name,
@@ -264,6 +280,8 @@ class SignalAgent:
                 "orb_low":          tech_extras.get("orb_low"),
                 "day_high":         stock_data.get("day_high"),
                 "day_low":          stock_data.get("day_low"),
+                "fib_levels":       fib_levels,
+                "intraday_5m":      stock_data.get("intraday_5m", []),
             }
 
         except Exception as e:

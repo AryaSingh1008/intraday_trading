@@ -148,14 +148,18 @@ class OptionsAgent:
 
         # ── IV Percentile ─────────────────────────────────────────────────────
         iv_percentile: Optional[float] = None
+        iv_readings_count: int = 0
         if avg_iv is not None and source != "synthetic":
             # Record today's reading FIRST so it's included in today's percentile
             iv_history_store.append_iv(symbol, avg_iv)
             iv_percentile = iv_history_store.get_iv_percentile(symbol, avg_iv)
+            iv_readings_count = len(iv_history_store.get_history(symbol))
 
         # Build IV advice (use percentile if we have enough history, else absolute)
         if iv_percentile is not None:
             iv_advice = _iv_advice_from_percentile(iv_percentile, avg_iv)
+            if iv_readings_count < iv_history_store._MIN_READINGS:
+                iv_advice = f"⚠️ Early estimate ({iv_readings_count}/5 days of data). " + iv_advice
         elif avg_iv is not None:
             iv_advice = _iv_advice_absolute(avg_iv)
 

@@ -89,6 +89,11 @@ function onAuthSuccess(user) {
   document.getElementById("app-container").style.display  = "";
   // Boot the app
 
+  // Request browser notification permission for wishlist signal alerts
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
   // Default: show ALL signals so sector filters always have results
   activeFilter = "ALL";
   document.querySelectorAll(".btn-filter").forEach(function(b) { b.classList.remove("active"); });
@@ -101,6 +106,7 @@ function onAuthSuccess(user) {
   loadWishlistCount();
   loadKnownStocks();
   loadIndexData();
+  loadFiiDii();
   startCountdown();
   document.addEventListener("click", function(e) {
     const wrap = document.querySelector(".wishlist-input-wrap");
@@ -309,7 +315,15 @@ function onStockSearchInput() {
     return bare.includes(q) || s.name.toUpperCase().includes(q);
   }).slice(0, 8);
 
-  if (!matches.length) { box.classList.add("d-none"); return; }
+  if (!matches.length) {
+    // No known match — offer "Analyze any NSE stock" fallback
+    box.innerHTML = '<div class="suggestion-item suggestion-custom" onclick="selectStockSuggestion(\'' + q.replace(/'/g, "\\'") + '\')">'
+      + '<span class="suggestion-symbol">🔍 ' + q + '</span>'
+      + '<span class="suggestion-name text-muted">Analyse any NSE stock &rarr;</span>'
+      + '</div>';
+    box.classList.remove("d-none");
+    return;
+  }
 
   box.innerHTML = matches.map(function(s) {
     const bare = s.symbol.replace(".NS", "").replace(".BO", "");
@@ -412,6 +426,8 @@ async function loadStocks(forceRefresh) {
 
       renderStocks();
       renderSignalStats();
+      _trackSignalPerformance();
+      _notifyWishlistChanges();
       _saveSignalSnapshot();
       renderGapScanner();
 
@@ -624,8 +640,103 @@ function _saveSignalSnapshot() {
   try { localStorage.setItem("_prevSignals", JSON.stringify(snap)); } catch(e) {}
 }
 
+function _notifyWishlistChanges() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  allStocks.forEach(function(s) {
+    if (!wishlistSymbols.has(s.symbol)) return;
+    const prev = prevSignals[s.symbol];
+    if (!prev || prev === s.signal) return;
+    const SIG_RANK = { "STRONG BUY": 5, "BUY": 4, "HOLD": 3, "SELL": 2, "STRONG SELL": 1 };
+    const dir = (SIG_RANK[s.signal] || 3) > (SIG_RANK[prev] || 3) ? "upgraded" : "downgraded";
+    const icon = dir === "upgraded" ? "🟢" : "🔴";
+    try {
+      new Notification(icon + " " + s.symbol.replace(".NS", "") + " signal " + dir, {
+        body: prev + "  →  " + s.signal + "  |  Score: " + s.score,
+        tag:  s.symbol,
+      });
+    } catch(e) {}
+  });
+}
+
 function _loadSignalSnapshot() {
   try { prevSignals = JSON.parse(localStorage.getItem("_prevSignals") || "{}"); } catch(e) { prevSignals = {}; }
+}
+
+// ── Signal performance tracker ────────────────────────────────────────────────
+// Logs each signal with its price, target, and stop. On subsequent refreshes
+// checks if the target or stop was hit and accumulates a running accuracy stat.
+function _trackSignalPerformance() {
+  try {
+    var today    = new Date().toISOString().slice(0, 10);
+    var logKey   = "_sigLog_" + today;
+    var statKey  = "_sigStats";
+    var log      = JSON.parse(localStorage.getItem(logKey) || "{}");
+    var stats    = JSON.parse(localStorage.getItem(statKey) || '{"wins":0,"losses":0,"total":0}');
+
+    allStocks.forEach(function(s) {
+      if (!s.symbol || s.unavailable) return;
+      var sym = s.symbol;
+
+      if (!log[sym]) {
+        // First time seeing this signal today — record it
+        if ((s.signal === "BUY" || s.signal === "STRONG BUY") && s.target_price && s.stop_loss) {
+          log[sym] = {
+            signal:       s.signal,
+            price:        s.current_price,
+            target:       s.target_price,
+            stop:         s.stop_loss,
+            logged_at:    new Date().toISOString(),
+            outcome:      null,
+          };
+        }
+      } else if (!log[sym].outcome) {
+        // Already logged — check if target or stop was hit
+        var cur = s.current_price;
+        if (cur >= log[sym].target) {
+          log[sym].outcome = "WIN";
+          stats.wins++;  stats.total++;
+        } else if (cur <= log[sym].stop) {
+          log[sym].outcome = "LOSS";
+          stats.losses++;  stats.total++;
+        }
+      }
+    });
+
+    localStorage.setItem(logKey, JSON.stringify(log));
+    localStorage.setItem(statKey, JSON.stringify(stats));
+    _renderSignalAccuracy(stats);
+  } catch(e) {}
+}
+
+function _renderSignalAccuracy(stats) {
+  var el = document.getElementById("signal-accuracy-badge");
+  if (!el || !stats.total) return;
+  var winRate = Math.round((stats.wins / stats.total) * 100);
+  el.textContent = "🎯 Signal accuracy: " + winRate + "% (" + stats.wins + "W / " + stats.losses + "L today)";
+  el.style.display = "";
+}
+
+// ── ORB session cache ──────────────────────────────────────────────────────────
+// Saves ORB high/low to localStorage so they persist across mid-session refreshes
+// and remain visible after market close when intraday bars are no longer returned.
+function _saveOrb(symbol, orb_high, orb_low) {
+  if (!symbol || !orb_high || !orb_low) return;
+  var today = new Date().toISOString().slice(0, 10);
+  try {
+    var store = JSON.parse(localStorage.getItem("_orbCache") || "{}");
+    store[symbol] = { date: today, orb_high: orb_high, orb_low: orb_low };
+    localStorage.setItem("_orbCache", JSON.stringify(store));
+  } catch(e) {}
+}
+
+function _loadOrb(symbol) {
+  try {
+    var store = JSON.parse(localStorage.getItem("_orbCache") || "{}");
+    var entry = store[symbol];
+    var today = new Date().toISOString().slice(0, 10);
+    if (entry && entry.date === today) return { orb_high: entry.orb_high, orb_low: entry.orb_low };
+  } catch(e) {}
+  return null;
 }
 
 function renderStocks() {
@@ -1000,7 +1111,13 @@ async function showDetail(symbol) {
       { v: "₹" + fmt(s.high_52w),                     l: "52W High"        },
       { v: "₹" + fmt(s.low_52w),                      l: "52W Low"         },
     ];
-    // ORB levels (if computed today)
+    // ORB levels — save fresh values; restore cached ones after market close
+    if (s.orb_high && s.orb_low) {
+      _saveOrb(symbol, s.orb_high, s.orb_low);
+    } else {
+      var cachedOrb = _loadOrb(symbol);
+      if (cachedOrb) { s.orb_high = cachedOrb.orb_high; s.orb_low = cachedOrb.orb_low; }
+    }
     if (s.orb_high) stats.push({ v: "₹" + fmt(s.orb_high), l: "⚡ ORB High" });
     if (s.orb_low)  stats.push({ v: "₹" + fmt(s.orb_low),  l: "⚡ ORB Low"  });
     // VWAP
@@ -1019,6 +1136,12 @@ async function showDetail(symbol) {
     if (s.target_buy_price) stats.push({ v: "₹" + fmt(s.target_buy_price),  l: "💡 Re-entry Target" });
     // Position sizing
     if (s.suggested_qty)    stats.push({ v: s.suggested_qty + " shares  (₹" + fmt(s.risk_amount) + " at risk)", l: "📐 Suggested Qty" });
+    // Fibonacci retracement levels (from 52-week high/low)
+    var fib = s.fib_levels || {};
+    if (fib.fib_618) stats.push({ v: "₹" + fmt(fib.fib_618), l: "🌀 Fib 61.8% (strong support)" });
+    if (fib.fib_500) stats.push({ v: "₹" + fmt(fib.fib_500), l: "🌀 Fib 50.0%"                  });
+    if (fib.fib_382) stats.push({ v: "₹" + fmt(fib.fib_382), l: "🌀 Fib 38.2%"                  });
+    if (fib.fib_236) stats.push({ v: "₹" + fmt(fib.fib_236), l: "🌀 Fib 23.6% (weak resistance)" });
     const statsEl = document.getElementById("modal-stats");
     if (statsEl) statsEl.innerHTML = stats.map(function(st) {
       return '<div class="col-6 col-md-4"><div class="stat-box">'
@@ -1120,7 +1243,14 @@ function renderModalChart(s, tf) {
 
   let prices = [], labels = [], noteText = "";
 
-  if (tf === "daily" && Array.isArray(s.daily_chart) && s.daily_chart.length) {
+  if (tf === "5m" && Array.isArray(s.intraday_5m) && s.intraday_5m.length) {
+    prices   = s.intraday_5m.map(function(d) { return d.price || d.close; });
+    labels   = s.intraday_5m.map(function(d) {
+      var t = d.time || "";
+      return t.substring(11, 16) || t.substring(0, 5) || t;
+    });
+    noteText = "Showing " + prices.length + " data points (5-min intervals)";
+  } else if (tf === "daily" && Array.isArray(s.daily_chart) && s.daily_chart.length) {
     prices    = s.daily_chart.map(function(d) { return d.price; });
     labels    = s.daily_chart.map(function(d) { return d.date;  });
     noteText  = "Showing " + prices.length + " daily candles (1 year)";
@@ -1183,6 +1313,66 @@ function renderModalChart(s, tf) {
     },
   });
   if (note) note.textContent = noteText;
+
+  // Render volume profile sidebar from 15m intraday bars
+  _renderVolumeProfile(s);
+}
+
+let _vpChart = null;
+
+function _renderVolumeProfile(s) {
+  const vpCtx = document.getElementById("volume-profile-chart");
+  if (!vpCtx) return;
+  if (_vpChart) { _vpChart.destroy(); _vpChart = null; }
+
+  const bars = (s.intraday || []).filter(function(b) { return b.volume && b.high && b.low; });
+  if (bars.length < 2) { vpCtx.style.display = "none"; return; }
+  vpCtx.style.display = "";
+
+  const allHighs = bars.map(function(b) { return b.high; });
+  const allLows  = bars.map(function(b) { return b.low;  });
+  const priceMax = Math.max.apply(null, allHighs);
+  const priceMin = Math.min.apply(null, allLows);
+  const BUCKETS  = 12;
+  const step     = (priceMax - priceMin) / BUCKETS || 1;
+
+  const bucketVol   = new Array(BUCKETS).fill(0);
+  const bucketLabel = [];
+  for (var i = 0; i < BUCKETS; i++) {
+    bucketLabel.push("₹" + Math.round(priceMin + i * step));
+  }
+  bars.forEach(function(b) {
+    var midPrice = (b.high + b.low) / 2;
+    var idx = Math.min(BUCKETS - 1, Math.floor((midPrice - priceMin) / step));
+    bucketVol[idx] += b.volume;
+  });
+
+  const maxVol = Math.max.apply(null, bucketVol) || 1;
+  const pocIdx = bucketVol.indexOf(maxVol);
+
+  const color = s.signal_color || "#1a237e";
+  const bgColors = bucketVol.map(function(_, i) {
+    return i === pocIdx ? "#e65100" : color + "88";
+  });
+
+  _vpChart = new Chart(vpCtx, {
+    type: "bar",
+    data: {
+      labels: bucketLabel,
+      datasets: [{ data: bucketVol, backgroundColor: bgColors, borderWidth: 0 }],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: function(c) { return "Vol: " + c.raw.toLocaleString("en-IN"); } }
+      }},
+      scales: {
+        x: { display: false },
+        y: { ticks: { font: { size: 9 }, color: "#555" } },
+      },
+    },
+  });
 }
 
 function exportExcel() {
@@ -1402,6 +1592,24 @@ async function loadNews() {
 }
 
 // ═══════════════════════════════════════════════════ INDEX STRIP ════
+
+async function loadFiiDii() {
+  try {
+    const r = await fetch("/api/fii-dii");
+    if (!r.ok) return;
+    const d = await r.json();
+    const el = document.getElementById("fii-dii-badge");
+    if (!el || d.market_bias === "UNAVAILABLE") return;
+    const biasColor = d.market_bias === "BULLISH" || d.market_bias === "MILDLY BULLISH"
+      ? "#1b5e20" : d.market_bias === "NEUTRAL" ? "#37474f" : "#b71c1c";
+    el.style.background = biasColor;
+    el.title   = d.bias_reason || "";
+    el.textContent = "FII/DII: " + d.market_bias
+      + "  |  FII Net ₹" + (d.fii_net || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr"
+      + "  |  DII Net ₹" + (d.dii_net || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr";
+    el.style.display = "";
+  } catch (_) {}
+}
 
 async function loadIndexData() {
   try {
@@ -1945,9 +2153,43 @@ function portSummaryCard(icon, label, value, sub) {
     + '</div></div>';
 }
 
+function _renderSectorRiskWarning(holdings) {
+  var warnEl = document.getElementById("portfolio-sector-warning");
+  if (!warnEl) return;
+
+  // Map known symbols to their sector from allStocks
+  var sectorMap = {};
+  allStocks.forEach(function(s) { if (s.symbol && s.sector) sectorMap[s.symbol] = s.sector; });
+
+  var sectorValues = {};
+  var totalValue   = 0;
+  holdings.forEach(function(h) {
+    var val    = h.current_value || h.invested || 0;
+    var sector = sectorMap[h.symbol] || "Others";
+    sectorValues[sector] = (sectorValues[sector] || 0) + val;
+    totalValue += val;
+  });
+
+  if (!totalValue) { warnEl.style.display = "none"; return; }
+
+  var warnings = [];
+  Object.keys(sectorValues).forEach(function(sec) {
+    var pct = (sectorValues[sec] / totalValue) * 100;
+    if (pct >= 40) warnings.push("<strong>" + sec + "</strong> is " + pct.toFixed(0) + "% of your portfolio — consider diversifying");
+  });
+
+  if (warnings.length) {
+    warnEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>Concentration risk: ' + warnings.join("; ");
+    warnEl.style.display = "";
+  } else {
+    warnEl.style.display = "none";
+  }
+}
+
 function renderPortfolioTable(holdings) {
   const tbody = document.getElementById("portfolio-table-body");
   if (!tbody) return;
+  _renderSectorRiskWarning(holdings);
   tbody.innerHTML = holdings.map(function(h) {
     const tGain    = h.total_gain    || 0;
     const dGain    = h.day_gain      || 0;
@@ -1958,9 +2200,14 @@ function renderPortfolioTable(holdings) {
     const safeSym  = (h.symbol || "").replace(/'/g, "\\'");
     const safeId   = (h.holding_id || "").replace(/'/g, "\\'");
 
+    const tslBadge = (tGain > 0 && h.total_gain_pct >= 10)
+      ? '<div class="tsl-badge">🔒 Raise stop to breakeven</div>'
+      : "";
+
     return '<tr>'
       + '<td><div class="fw-bold">' + (h.name||h.symbol) + '</div>'
-      + '<div class="text-muted small">' + h.symbol + '</div></td>'
+      + '<div class="text-muted small">' + h.symbol + '</div>'
+      + tslBadge + '</td>'
       + '<td>₹' + fmt(h.buy_price) + '</td>'
       + '<td>' + (h.current_price ? '₹' + fmt(h.current_price) : '<span class="text-muted">—</span>') + '</td>'
       + '<td>' + (h.quantity||0) + '</td>'

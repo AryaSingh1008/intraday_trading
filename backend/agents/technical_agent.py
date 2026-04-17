@@ -287,6 +287,17 @@ class TechnicalAgent:
                 elif vol_zscore <= -1.0:
                     reasons.append("Below-average volume — move lacks conviction, treat signals with caution")
 
+            # ── 5c. Liquidity / slippage warning ──────────────────────────────
+            # Thin volume relative to average means wider bid-ask spreads and worse fills.
+            if avg_volume > 0 and volume > 0:
+                vol_ratio = volume / avg_volume
+                if vol_ratio < 0.3:
+                    score -= 5
+                    reasons.append(
+                        f"⚠️ Low liquidity: today's volume is only {vol_ratio:.0%} of the 30-day average"
+                        f" — expect wider spreads and slippage, use limit orders"
+                    )
+
             # ── 5b. ADX – trend strength (scoring block, after RSI uses it above) ──
             if adx_val is not None:
                 if adx_val > 25:
@@ -412,6 +423,28 @@ class TechnicalAgent:
                     nearest = min(candidates, key=lambda x: abs(current_price - x))
                     score -= 5
                     reasons.append(f"Price near pivot resistance ₹{nearest:.0f} — potential rejection zone")
+
+            # ── 9. Daily Trend Alignment (multi-timeframe confirmation) ───────
+            # Protects against buying into an intraday uptick inside a daily downtrend.
+            # Uses the same `hist` (1y daily bars) already loaded — no extra API call.
+            if mode != "positional" and len(close) >= 20:
+                try:
+                    daily_sma20 = float(close.rolling(20).mean().iloc[-1])
+                    daily_bull  = current_price > daily_sma20
+
+                    if score > 55 and not daily_bull:
+                        score -= 8
+                        reasons.append(
+                            "⚠️ Intraday BUY signal against daily downtrend"
+                            f" (price below 20-day SMA ₹{daily_sma20:.0f}) — elevated risk, smaller size recommended"
+                        )
+                    elif score > 65 and daily_bull:
+                        score = min(100, score + 5)
+                        reasons.append(
+                            f"✅ Signal confirmed by daily uptrend (price above 20-day SMA ₹{daily_sma20:.0f}) — higher confidence"
+                        )
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"TechnicalAgent.analyze error: {e}")

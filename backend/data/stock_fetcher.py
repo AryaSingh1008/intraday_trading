@@ -52,15 +52,25 @@ class StockFetcher:
             logger.error(f"Batch history download failed: {e}")
             hist_all = pd.DataFrame()
 
-        # --- Batch download: 1d intraday (for VWAP + mini-charts) ---
+        # --- Batch download: 1d intraday 15m (for VWAP + mini-charts) ---
         try:
             intra_all = yf.download(
                 symbols, period="1d", interval="15m",
                 group_by="ticker", threads=True, progress=False,
             )
         except Exception as e:
-            logger.error(f"Batch intraday download failed: {e}")
+            logger.error(f"Batch intraday 15m download failed: {e}")
             intra_all = pd.DataFrame()
+
+        # --- Batch download: 1d intraday 5m (for higher-resolution chart) ---
+        try:
+            intra5m_all = yf.download(
+                symbols, period="1d", interval="5m",
+                group_by="ticker", threads=True, progress=False,
+            )
+        except Exception as e:
+            logger.warning(f"Batch intraday 5m download failed: {e}")
+            intra5m_all = pd.DataFrame()
 
         # --- Fetch NIFTY 50 for relative strength calculation (one call, shared) ---
         nifty_close = None
@@ -127,6 +137,32 @@ class StockFetcher:
                 day_high = round(max(b["high"] for b in intraday), 2) if intraday else None
                 day_low  = round(min(b["low"]  for b in intraday), 2) if intraday else None
 
+                # Extract 5m intraday bars
+                intraday_5m = []
+                try:
+                    if not intra5m_all.empty:
+                        intra5 = intra5m_all.copy() if len(symbols) == 1 else (
+                            intra5m_all[symbol].copy()
+                            if symbol in intra5m_all.columns.get_level_values(0) else pd.DataFrame()
+                        )
+                        if not intra5.empty and "Close" in intra5.columns:
+                            intra5 = intra5.dropna(subset=["Close"])
+                            for t, row in intra5.iterrows():
+                                try:
+                                    intraday_5m.append({
+                                        "time":   str(t),
+                                        "open":   round(float(row["Open"]),  2),
+                                        "high":   round(float(row["High"]),  2),
+                                        "low":    round(float(row["Low"]),   2),
+                                        "close":  round(float(row["Close"]), 2),
+                                        "volume": int(row["Volume"]) if not pd.isna(row.get("Volume", float("nan"))) else 0,
+                                        "price":  round(float(row["Close"]), 2),
+                                    })
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+
                 results[symbol] = {
                     "symbol":        symbol,
                     "current_price": current_price,
@@ -140,6 +176,7 @@ class StockFetcher:
                     "day_low":       day_low,
                     "hist":          hist,
                     "intraday":      intraday,
+                    "intraday_5m":   intraday_5m,
                     "nifty_hist":    nifty_close,  # shared NIFTY 50 close series
                 }
 

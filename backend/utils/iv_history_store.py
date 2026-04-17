@@ -154,15 +154,14 @@ def get_iv_percentile(symbol: str, current_iv: Optional[float]) -> Optional[floa
         logger.warning(f"iv_history_store.get_iv_percentile error: {e}")
         return None
 
-    if len(hist) < _MIN_READINGS:
-        return None
-
     historical_ivs = [h["iv"] for h in hist if isinstance(h.get("iv"), (int, float))]
-    if len(historical_ivs) < _MIN_READINGS:
+    if not historical_ivs:
         return None
 
     below = sum(1 for iv in historical_ivs if iv < current_iv)
     pct   = (below / len(historical_ivs)) * 100.0
+    # Return estimate even with < _MIN_READINGS; accuracy improves as history grows.
+    # Frontend shows a "⚠️ early estimate" note when readings < _MIN_READINGS.
     return round(pct, 1)
 
 
