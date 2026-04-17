@@ -234,4 +234,6 @@ output "github_connection_arn" {
 output "pipeline_artifacts_bucket" {
   value       = aws_s3_bucket.pipeline_artifacts.bucket
   description = "S3 bucket used as CodePipeline artifact store"
+  sensitive   = true
+
 }
