@@ -29,6 +29,7 @@ locals {
     market_status          = "${local.prefix}-market-status"
     excel_export           = "${local.prefix}-excel-export"
     cache_clear            = "${local.prefix}-cache-clear"
+    fii_dii                = "${local.prefix}-fii-dii"
     bedrock_chat           = "${local.prefix}-bedrock-chat"
     bedrock_technical_tool = "${local.prefix}-bedrock-technical-tool"
     bedrock_sentiment_tool = "${local.prefix}-bedrock-sentiment-tool"

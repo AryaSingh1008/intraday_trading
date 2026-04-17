@@ -23,15 +23,20 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 |---------|----------------------|---------------|
 | **Cost** | ₹500–2000/month | ~$17–22/month (60s intraday refresh + Bedrock AI) |
 | **AI Chat** | None or basic | Ask anything in plain English, Claude Haiku 3.5 provides institutional analysis |
-| **Signal Engine** | 2–3 indicators | 13 indicators + VWAP + ORB + support/resistance + 200-day SMA + AI-validated + news sentiment (adaptive weighting) |
+| **Signal Engine** | 2–3 indicators | 13 indicators + VWAP + ORB + support/resistance + 200-day SMA + Fibonacci + volume profile + FII/DII market bias + AI-validated + news sentiment (adaptive weighting) |
 | **News Sentiment** | Separate tab / manual reading | Built into signal score — 6 RSS feeds auto-weighted by recency (intraday-tightened) + source authority |
-| **Data Source** | Paid APIs | 100% free (yfinance, NSE, Google News RSS, Bedrock AI) |
+| **Alerts** | None or paid add-on | Browser push notifications for wishlist stocks + signal tracking (hit rate %) |
+| **Timeframes** | 15m or 1h minimum | **5-min + 15-min + daily** — cleanest entry signals on 5m, validated against daily trend |
+| **Institutional Data** | None | FII/DII daily net buy/sell → market bias badge + signal score adjustment |
+| **Data Source** | Paid APIs | 100% free (yfinance, NSE, 6 RSS feeds, Bedrock AI) |
 | **Infrastructure** | Always-on servers | Serverless — scales to $0 when market is closed |
 | **Index Strip** | Separate terminal / app | NIFTY 50, BANKNIFTY, India VIX live in the header — always visible |
 | **R:R Ratio** | Manual calculation | Auto-calculated on every signal card from ATR-based targets |
-| **Options Analysis** | Separate platform | PCR, IV percentile, Greeks, max-pain — all in-dashboard |
+| **Options Analysis** | Separate platform | PCR, IV percentile (with 1-day fallback), Greeks, max-pain — all in-dashboard |
+| **Volume Profile** | Premium add-on | Horizontal bar chart POC (Point-of-Control) shown inline |
+| **Risk Management** | Manual | Sector concentration warning + liquidity alerts + 2% risk position sizing |
 | **Export** | Screenshot or manual | One-click Excel export of all 80 stocks |
-| **Mobile** | Desktop-first | Mobile-responsive — built for trading from a phone |
+| **Mobile** | Desktop-first | Mobile-responsive — browser notifications work on Android |
 
 ---
 
@@ -89,6 +94,23 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - One-click Excel export with full analysis for all 80 stocks
 - Styled XLSX: signal-based background colors, formatted headers, title + disclaimer
 
+### 🔔 Real-Time Alerts & Signal Tracking
+- **Browser Notifications** — instant popup when a wishlist stock flips to STRONG BUY/SELL (works on mobile too)
+- **Signal Performance Tracking** — localStorage tracks every BUY signal, computes hit rate, shows accuracy badge
+- **FII/DII Market Sentiment** — daily institutional buying/selling data from NSE; market bias badge (BEARISH/BULLISH/NEUTRAL) in header with score adjustments
+
+### 📊 Advanced Charting & Technical Levels
+- **Dual Timeframe Support** — switch between 5m and 15m intraday charts; cleaner entry signals on faster timeframes
+- **Volume Profile Histogram** — horizontal bar chart showing volume-at-price; Point-of-Control (POC) highlighted in orange for institutional levels
+- **Fibonacci Retracements** — 23.6%, 38.2%, 50%, 61.8% levels calculated from 52W high/low; shown in modal stats for swing trade targets
+- **Multi-Timeframe Validation** — daily trend filters prevent STRONG BUY signals when daily price < SMA20; alerts "Against daily downtrend"
+- **Liquidity Warnings** — stocks with low volume (< 30% of 20-day avg) flagged with reduced score; prevents slippage surprises
+
+### 📈 Portfolio Risk Management
+- **Sector Concentration Alert** — portfolio tab warns if any sector ≥40% of holdings; prevents correlated drawdowns
+- **Trailing Stop Loss Badge** — "🔒 Raise stop to breakeven" reminder when profit ≥10% (roadmap: auto-update stops)
+- **Position Sizing** — 2% risk per trade calculated automatically from ATR-based stops on ₹100K portfolio
+
 ### 🔐 Authentication (AWS Cognito)
 - Login / Sign-up screen before the dashboard is accessible — no one can view data without an account
 - Email + password sign-up with email verification (6-digit code)
@@ -139,6 +161,87 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 - Every refresh fetches **live data directly** — no stale cache, prices always reflect current market
 - **Stale-while-revalidate architecture**: on every refresh cycle, existing stock cards stay visible immediately; fresh data is merged in-place as each page arrives — no blanking, no 30-second waits
 - **Overlap-safe**: the background refresh guard stays active until all 4 pages finish loading, preventing overlapping refreshes if a cycle runs long
+
+---
+
+## 🚀 Latest Improvements (v2.0)
+
+### ✅ 15 Critical Enhancements Shipped
+
+#### **1. RSS Feed Timeout Protection** 🔴→✅
+- **Issue**: `feedparser.parse()` had no timeout — if any of the 6 RSS feeds hung, the entire Lambda could hit the 29s timeout and crash signal generation
+- **Fix**: Added `_parse_feed(url, timeout=5)` wrapper in `sentiment_agent.py` with urllib timeout control
+- **Impact**: Eliminates Lambda crashes from stuck RSS feeds; graceful fallback to empty sentiment on timeout
+
+#### **2. Browser Push Notifications** 🔔
+- **Issue**: No alerting system — had to keep the tab open 24/7 to catch a STRONG BUY signal
+- **Fix**: Added `_notifyWishlistChanges()` function + browser Notification API with permission request on login
+- **Impact**: Instant popup notification when a wishlist stock upgrades/downgrades signal. Works on desktop/Android
+
+#### **3. Signal Performance Tracking** 📊
+- **Issue**: No backtesting — no way to know if signals have historically worked
+- **Fix**: Added `_trackSignalPerformance()` logging all BUY signals to localStorage, tracking target/stop hits, computes accuracy
+- **Impact**: Signal Accuracy badge shows hit rate %. Users can see which signal types (MACD crossover, ORB, etc.) are most reliable
+
+#### **4. 5-Minute Intraday Chart Support** ⏱️
+- **Issue**: Only 15m bars were available; most scalpers need 5m or 1m data
+- **Fix**: Added parallel `yfinance` call for 5m bars in `stock_fetcher.py`, rendered via new "5m" chart timeframe toggle in frontend
+- **Impact**: Cleaner ORB + VWAP retest setups visible on 5m. Users can switch between 5m ↔ 15m on modal chart
+
+#### **5. NIFTY 50 Column Guard** 🛡️
+- **Issue**: If yfinance returned unexpected schema for ^NSEI, RS ratio calculation failed silently with KeyError
+- **Fix**: Added `"Close" in hist.columns` validation before RS ratio computation in `signal_agent.py`
+- **Impact**: Graceful fallback to neutral RS adjustment if NIFTY data is malformed; no crash
+
+#### **6. Trailing Stop-Loss Logic** 📈
+- **Issue**: Static stops calculated at signal time never trailed; stock could hit stop then rocket upward
+- **Fix**: Added "🔒 Raise stop to breakeven" badge on holdings with ≥10% unrealised gain in portfolio
+- **Impact**: Visual cue to manually trail stops. Roadmap: auto-update DynamoDB schema for fully automated TSL
+
+#### **7. Custom Stock Universe** 🔍
+- **Issue**: Fixed 80-stock list; couldn't trade breakouts in mid-caps like IREDA, RAIL VIK
+- **Fix**: Added "🔍 Analyse any NSE stock →" fallback in search bar when no known stocks match
+- **Impact**: Users can now analyze ANY NSE/BSE symbol on-demand — search bar calls `/api/stock/{symbol}` directly
+
+#### **8. Multi-Timeframe Trend Confirmation** 🔄
+- **Issue**: 15m BUY signals in strong daily downtrends were dangerous fades
+- **Fix**: Added daily trend alignment check in `technical_agent.py` — if score > 55 but daily price < SMA20, reduce by 8pts; if daily bullish, add 5pts bonus
+- **Impact**: Eliminates high-probability false signals by validating against daily trend. More reliable swing trades
+
+#### **9. Liquidity & Slippage Warning** ⚠️
+- **Issue**: Position sizing assumed perfect fills; thin stocks (IDEA, NATIONALUM) had 1-2% fill slippage
+- **Fix**: Added volume check in `technical_agent.py` — if volume < 30% of 20-day avg, reduce score by 5 and flag "Low liquidity"
+- **Impact**: Prevents entry into illiquid symbols. Protects against slippage on actual trade entry
+
+#### **10. Portfolio Sector Concentration Warning** 📊
+- **Issue**: Max per-trade risk enforced (2% rule) but no check for sector concentration (e.g., 30% in Banking)
+- **Fix**: Added `_renderSectorRiskWarning(holdings)` in portfolio tab — calculates % per sector, warns if any ≥40%
+- **Impact**: Visual red warning: "⚠️ Banking: 45% — too concentrated!" Prevents correlated drawdowns
+
+#### **11. Volume Profile Chart** 📈
+- **Issue**: VWAP shown but no volume-at-price histogram — institutional support/resistance levels invisible
+- **Fix**: Added `_renderVolumeProfile(s)` function computing 12 price buckets, rendering horizontal bar chart via Chart.js
+- **Impact**: Point-of-Control (POC) highlighted in orange. Users see which price levels had highest volume — natural support/resistance
+
+#### **12. Fibonacci Retracement Levels** 📐
+- **Issue**: No Fibonacci levels despite having 1-year H/L data
+- **Fix**: Added `fib_levels` dict in `signal_agent.py` with 23.6%, 38.2%, 50%, 61.8% retracements from 52W high/low
+- **Impact**: Modal stats now show Fib targets. Swing traders can set stop-losses and targets using Fibonacci zones
+
+#### **13. FII/DII Market Sentiment Data** 🏛️
+- **Issue**: Foreign/Domestic Institutional Investor flow is the single biggest intraday market driver — completely absent
+- **Fix**: New Lambda `trading_fii_dii` fetches NSE public endpoint `/api/fiidiiTradeReact` daily, returns market_bias + fii_net + score_modifier
+- **Impact**: FII/DII badge in header shows "BEARISH (₹2000Cr sold)" or "BULLISH (₹1500Cr bought)". Signal scores auto-adjusted by -8 to +5 based on FII flow
+
+#### **14. IV Percentile Bootstrap Fallback** ⚡
+- **Issue**: New symbols showed "⚠️ Coming soon" for 5 days waiting for _MIN_READINGS
+- **Fix**: Removed _MIN_READINGS hard requirement in `iv_history_store.py`. Now returns early estimate with label "⚠️ Early estimate (2/5 days)"
+- **Impact**: Options data available instantly on Day 1 instead of Day 5+. Label makes uncertainty transparent to user
+
+#### **15. ORB Session Caching** 🔐
+- **Issue**: Opening Range Breakout (ORB) values reset incorrectly if user refreshed mid-session
+- **Fix**: Added `_saveOrb(symbol, orb_high, orb_low)` and `_loadOrb(symbol)` functions using localStorage with date matching
+- **Impact**: ORB values persist across page refreshes. Accurate intraday ORB tracking throughout the trading day
 
 ---
 
@@ -260,7 +363,7 @@ User asks AI → Bedrock Agent calls 3 tools → returns reasoned analysis
 ### Signal Generation Pipeline
 
 ```
-Yahoo Finance (1yr daily + 1d intraday 15m bars)
+Yahoo Finance (1yr daily + intraday 5m & 15m bars)
         │
         ▼
 ┌─── TECHNICAL AGENT ────────────────────────────────────┐
@@ -342,7 +445,7 @@ User: "Should I buy RELIANCE today?"
 └───────────────────────────────────────────────────────┘
 ```
 
-### Lambda Functions (13 Total)
+### Lambda Functions (14 Total)
 
 | Function | Purpose | Timeout | Layers |
 |----------|---------|---------|--------|
@@ -358,6 +461,7 @@ User: "Should I buy RELIANCE today?"
 | `trading_portfolio` | Holdings P&L tracker | 10s | backend |
 | `trading_market_status` | IST market hours + NIFTY 50 / BANKNIFTY / India VIX live prices | 15s | backend (stdlib only — no yfinance) |
 | `trading_excel_export` | XLSX generation + pre-signed S3 URL | 10s | backend, export |
+| `trading_fii_dii` | GET /api/fii-dii — FII/DII market sentiment data from NSE | 10s | backend |
 | `trading_cache_clear` | Manual cache invalidation | 5s | backend |
 
 ### DynamoDB Tables (3)
@@ -377,8 +481,10 @@ User: "Should I buy RELIANCE today?"
 | Stock Prices (OHLCV) | Yahoo Finance (yfinance) | Real-time | Covers NSE + BSE, batch download for 80 stocks |
 | 1-Year Daily History | Yahoo Finance | Daily | For 200-day SMA + all indicator calculations |
 | 15-min Intraday Bars | Yahoo Finance | Intraday | For VWAP calculation + mini-charts |
-| News Headlines | 6 RSS Feeds (ET, MC, BS, LM, Yahoo, Google) | Every 2–5 min | Weighted by source authority |
+| 5-min Intraday Bars | Yahoo Finance | Intraday | For faster entry signals (ORB, VWAP retest) on 5m timeframe |
+| News Headlines | 6 RSS Feeds (ET, MC, BS, LM, Yahoo, Google) | Every 2–5 min | Weighted by source authority + recency (intraday-tightened) |
 | Options Chain | NSE Public API (curl_cffi TLS fingerprint) | Real-time | Fallback: Yahoo Finance → Synthetic chain |
+| FII/DII Data | NSE Public API (`fiidiiTradeReact`) | Daily (9:40 AM) | Foreign/Domestic Institutional Investor net buy/sell activity; market bias modifier |
 | NIFTY 50 Index | Yahoo Finance | Real-time | Shared fetch for relative strength calculation |
 | Market Status | Local IST time | Hardcoded | 9:15 AM – 3:30 PM IST, weekdays |
 | NIFTY 50 / BANKNIFTY / India VIX | Yahoo Finance v8 chart API (direct HTTP) | Every 5 min | Shown in index strip — last close when market is closed, live during hours |
@@ -426,8 +532,14 @@ User: "Should I buy RELIANCE today?"
 | **Support/Resistance** | Pivot points | ±5 | Price near nearest S1/S2/R1/R2 — bounce/rejection zones |
 | **Relative Strength** | vs NIFTY 50 | ±5 | RS = (1+stock_return)/(1+nifty_return) — >1.2 outperforming |
 
+### Daily Trend Filter (Multi-Timeframe Validation)
+- Before generating a 15m intraday signal, system checks daily price vs daily SMA20
+- **BUY on 15m but price < SMA20 on daily?** → Signal downgraded to HOLD; marked "Against daily trend"
+- **BUY on 15m AND price > SMA20 on daily?** → Bonus +5 points; marked "Daily trend aligned"
+- **STRONG BUY in strong daily downtrend** → Immediately suspect; high fade probability
+
 ### AI Signal Validator (Claude Haiku 3.5)
-- Receives all 12 indicators + sentiment score + relative strength vs NIFTY 50
+- Receives all 12 indicators + sentiment score + relative strength vs NIFTY 50 + daily trend alignment + liquidity check
 - Validates the BUY/SELL/HOLD signal, identifies contradictions, flags risks
 - Returns: thesis, confidence level, risk warnings, conflicting signals
 - **Never invents data** — only reasons about pre-computed indicators
@@ -671,19 +783,43 @@ aws cloudfront create-invalidation --distribution-id $DIST --paths "/*"
 
 ## 🗺️ Roadmap
 
-- 🔔 **Push Notifications** — Alert when a watchlist stock flips to STRONG BUY/SELL
+### 🎯 Next Sprint (High ROI)
 - 📱 **PWA** — Install on phone like a native app
-- 🧪 **Backtesting Engine** — "Would this signal have worked 6 months ago?"
+- 🔐 **Telegram Bot** — `/signal TCS` → full analysis; instant alerts on new STRONG signals
+- 🧪 **Full Backtesting Engine** — 1-year replay of any strategy; win rate + Sharpe ratio + max drawdown
 - 🧠 **Fine-tuned Sentiment** — Custom model trained on Indian financial news
-- 📊 **Performance Dashboard** — Signal accuracy tracking over time
+- 📊 **Automated Trailing Stops** — DynamoDB auto-updates stop-loss to breakeven at 50% profit
+- 🌐 **Expandable Universe** — Let users add custom watchlists beyond 80 stocks
 
-**Recently Shipped:**
-- ✅ **Refresh Architecture** — Stale-while-revalidate + merge-in-place: all 80 cards stay on screen during every refresh; background refresh guard covers all 4 pages to prevent overlap; single DOM render pass per cycle (was 4×)
-- ✅ **Sector Filter Fix** — Default signal filter changed to "All"; clicking a sector auto-resets the signal filter so Banking/Finance/etc. always show stocks regardless of market conditions
+### 🚀 Recently Shipped (v2.0 — 15 Critical Improvements)
+
+#### Core Stability & Reliability
+- ✅ **RSS Feed Timeout Protection** — 5s timeout on feedparser to prevent Lambda crashes from stuck feeds
+- ✅ **NIFTY Column Guard** — Validation check prevents silent RS ratio failures if yfinance schema changes
+
+#### User Experience & Alerts
+- ✅ **Browser Push Notifications** — Real-time popup when wishlist stocks flip to STRONG BUY/SELL
+- ✅ **Signal Performance Tracker** — localStorage tracking + accuracy badge showing hit rate % per signal type
+- ✅ **ORB Session Caching** — Opening Range Breakout values persist across refreshes via localStorage with date matching
+
+#### Data & Analysis
+- ✅ **5-Minute Intraday Support** — Parallel yfinance fetch for 5m bars; switch 5m ↔ 15m on chart modal
+- ✅ **FII/DII Market Data** — New `/api/fii-dii` Lambda; market bias badge (BEARISH/BULLISH) with ±5 to ±8 score adjustments
+- ✅ **Fibonacci Retracements** — 23.6%, 38.2%, 50%, 61.8% levels from 52W high/low shown in modal stats
+- ✅ **Volume Profile Histogram** — Horizontal bar chart with POC (Point-of-Control) highlighting institutional levels
+- ✅ **IV Percentile Bootstrap Fallback** — Removed 5-day minimum; returns early estimate with "2/5 days" label
+
+#### Validation & Risk Management
+- ✅ **Multi-Timeframe Trend Confirmation** — Daily trend filter prevents STRONG BUY in downtrends; daily bullish adds +5 bonus
+- ✅ **Liquidity & Slippage Warning** — Stocks < 30% of avg volume get -5 score reduction; prevents thin-stock surprises
+- ✅ **Portfolio Sector Concentration** — Red warning if any sector ≥40% of holdings; prevents correlated drawdowns
+- ✅ **Trailing Stop Badge** — "🔒 Raise stop to breakeven" reminder when profit ≥10%
+- ✅ **Custom Stock Analysis** — Search bar analyzes ANY NSE/BSE symbol on-demand (not limited to 80-stock list)
+
+#### Previous Releases
+- ✅ **Refresh Architecture** — Stale-while-revalidate + merge-in-place: all 80 cards stay on screen during refresh
 - ✅ **Sort Bar** — Sort grid by Score / R:R ratio / Change% / Volume with one click
-- ✅ **Compact Signal Pill Bar** — 5-signal summary compressed into a single interactive row above the grid; each pill filters the view on click
-- ✅ **ORB + Day High/Low** — Opening Range Breakout detection on cards with intraday high/low from 15-min bars
-- ✅ **Signal Changed Badge** — ↑ UPGRADED / ↓ DOWNGRADED badge on cards that changed signal since the last refresh (localStorage snapshot, no extra API call)
-- ✅ **Live Data** — Removed 15-min DynamoDB cache; all signals now computed fresh on every request so buy/sell targets always match current price
-- ✅ **Cognito Authentication** — Email/password login with per-user wishlist and portfolio isolation
-- ✅ **CI/CD Pipeline** — GitHub Actions deploys infrastructure and frontend on push to `main`
+- ✅ **Signal Changed Badge** — ↑ UPGRADED / ↓ DOWNGRADED badge on cards that changed since last refresh
+- ✅ **Live Data** — Removed 15-min DynamoDB cache; all signals computed fresh on every request
+- ✅ **Cognito Authentication** — Per-user wishlist and portfolio isolation
+- ✅ **CI/CD Pipeline** — GitHub Actions auto-deploys infrastructure and frontend

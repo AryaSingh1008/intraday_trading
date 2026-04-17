@@ -64,6 +64,13 @@ data "archive_file" "cache_clear" {
   excludes    = ["__pycache__", "*.pyc", ".DS_Store"]
 }
 
+data "archive_file" "fii_dii" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/trading_fii_dii"
+  output_path = "${local.layers_dir}/zips/trading_fii_dii.zip"
+  excludes    = ["__pycache__", "*.pyc", ".DS_Store"]
+}
+
 data "archive_file" "bedrock_chat" {
   type        = "zip"
   source_dir  = "${local.lambdas_dir}/trading_bedrock_chat"
@@ -342,6 +349,25 @@ resource "aws_lambda_function" "cache_clear" {
   depends_on = [aws_cloudwatch_log_group.lambda_logs]
 }
 
+resource "aws_lambda_function" "fii_dii" {
+  function_name    = local.lambda_names.fii_dii
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "python3.12"
+  handler          = "handler.handler"
+  filename         = data.archive_file.fii_dii.output_path
+  source_code_hash = data.archive_file.fii_dii.output_base64sha256
+  timeout          = 10
+  memory_size      = 128
+
+  layers = compact([local.backend_layer_arn])
+
+  environment {
+    variables = local.common_env
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_logs]
+}
+
 resource "aws_lambda_function" "bedrock_chat" {
   function_name    = local.lambda_names.bedrock_chat
   role             = aws_iam_role.lambda_exec.arn
@@ -379,6 +405,7 @@ locals {
     market_status    = aws_lambda_function.market_status.function_name
     excel_export     = aws_lambda_function.excel_export.function_name
     cache_clear      = aws_lambda_function.cache_clear.function_name
+    fii_dii          = aws_lambda_function.fii_dii.function_name
     bedrock_chat     = aws_lambda_function.bedrock_chat.function_name
     portfolio        = aws_lambda_function.portfolio.function_name
   }

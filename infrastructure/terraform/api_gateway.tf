@@ -94,6 +94,14 @@ resource "aws_apigatewayv2_integration" "cache_clear" {
   timeout_milliseconds   = 10000
 }
 
+resource "aws_apigatewayv2_integration" "fii_dii" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.fii_dii.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 10000
+}
+
 resource "aws_apigatewayv2_integration" "bedrock_chat" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
@@ -165,6 +173,14 @@ resource "aws_apigatewayv2_route" "delete_cache" {
   api_id             = aws_apigatewayv2_api.main.id
   route_key          = "DELETE /api/cache"
   target             = "integrations/${aws_apigatewayv2_integration.cache_clear.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}
+
+resource "aws_apigatewayv2_route" "get_fii_dii" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "GET /api/fii-dii"
+  target             = "integrations/${aws_apigatewayv2_integration.fii_dii.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
