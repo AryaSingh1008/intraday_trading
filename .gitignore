@@ -20,7 +20,7 @@ terraform.tfvars.json
 *.env
 
 # Claude local settings
-.claude/settings.local.json
+.claude/
 
 # macOS
 .DS_Store

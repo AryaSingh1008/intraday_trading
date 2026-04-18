@@ -106,7 +106,7 @@ function onAuthSuccess(user) {
   loadWishlistCount();
   loadKnownStocks();
   loadIndexData();
-  loadFiiDii();
+
   startCountdown();
   document.addEventListener("click", function(e) {
     const wrap = document.querySelector(".wishlist-input-wrap");
@@ -1591,25 +1591,6 @@ async function loadNews() {
   }
 }
 
-// ═══════════════════════════════════════════════════ INDEX STRIP ════
-
-async function loadFiiDii() {
-  try {
-    const r = await fetch("/api/fii-dii");
-    if (!r.ok) return;
-    const d = await r.json();
-    const el = document.getElementById("fii-dii-badge");
-    if (!el || d.market_bias === "UNAVAILABLE") return;
-    const biasColor = d.market_bias === "BULLISH" || d.market_bias === "MILDLY BULLISH"
-      ? "#1b5e20" : d.market_bias === "NEUTRAL" ? "#37474f" : "#b71c1c";
-    el.style.background = biasColor;
-    el.title   = d.bias_reason || "";
-    el.textContent = "FII/DII: " + d.market_bias
-      + "  |  FII Net ₹" + (d.fii_net || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr"
-      + "  |  DII Net ₹" + (d.dii_net || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr";
-    el.style.display = "";
-  } catch (_) {}
-}
 
 async function loadIndexData() {
   try {
