@@ -23,20 +23,18 @@ phases:
 
   pre_build:
     commands:
-      - cd ${TF_DIR}
       - |
-        terraform init \
+        terraform -chdir=${TF_DIR} init \
           -backend-config="bucket=${TF_STATE_BUCKET}" \
           -backend-config="key=trading/terraform.tfstate" \
           -backend-config="region=us-east-1" \
           -input=false
-      - terraform validate
+      - terraform -chdir=${TF_DIR} validate
 
   build:
     commands:
-      - cd ${TF_DIR}
       - |
-        terraform plan \
+        terraform -chdir=${TF_DIR} plan \
           -var="lambda_layers_built=true" \
           -out=tfplan \
           -input=false
