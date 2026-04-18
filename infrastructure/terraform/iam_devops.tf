@@ -225,6 +225,15 @@ resource "aws_iam_role_policy" "codebuild" {
   policy = data.aws_iam_policy_document.codebuild_permissions.json
 }
 
+# AWS-managed ReadOnlyAccess — grants read across every AWS service.
+# Terraform plan needs to read current state of every managed resource
+# (Get*, List*, Describe*, ListTagsForResource, etc). Write permissions
+# remain controlled by the inline policy above.
+resource "aws_iam_role_policy_attachment" "codebuild_readonly" {
+  role       = aws_iam_role.codebuild.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
 # X-Ray write access for Lambda functions (used when tracing_config = "Active")
 resource "aws_iam_role_policy_attachment" "lambda_xray" {
   role       = aws_iam_role.lambda_exec.name

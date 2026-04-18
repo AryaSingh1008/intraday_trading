@@ -44,7 +44,11 @@ artifacts:
   files:
     - infrastructure/terraform/tfplan
     - infrastructure/terraform/.terraform.lock.hcl
+    - infrastructure/terraform/**/*
+    - infrastructure/buildspec/**/*
+    - infrastructure/appspec/**/*
     - infrastructure/layers/**/*
+    - frontend/**/*
     - lambdas/**/*
     - backend/**/*
     - prompts/**/*
