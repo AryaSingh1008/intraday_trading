@@ -124,9 +124,12 @@ data "aws_iam_policy_document" "codebuild_permissions" {
   }
 
   statement {
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
-    resources = ["arn:aws:ssm:${local.region}:${local.account_id}:parameter/trading/*"]
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter", "ssm:GetParameters",
+      "ssm:DescribeParameters", "ssm:GetParametersByPath",
+    ]
+    resources = ["*"]
   }
 
   # Full admin over trading-* tagged resources (same scope as github-actions OIDC role)
@@ -186,10 +189,31 @@ data "aws_iam_policy_document" "codebuild_permissions" {
     effect = "Allow"
     actions = [
       "codedeploy:CreateDeployment",
-      "codedeploy:GetDeployment",
-      "codedeploy:GetDeploymentConfig",
-      "codedeploy:RegisterApplicationRevision",
-      "codedeploy:GetApplicationRevision",
+      "codedeploy:GetDeployment", "codedeploy:GetDeploymentConfig",
+      "codedeploy:RegisterApplicationRevision", "codedeploy:GetApplicationRevision",
+      "codedeploy:GetApplication", "codedeploy:GetDeploymentGroup",
+      "codedeploy:ListDeploymentGroups", "codedeploy:BatchGetDeploymentGroups",
+    ]
+    resources = ["*"]
+  }
+
+  # Terraform plan reads current state of every managed resource.
+  # These read-only permissions cover all services in this project's .tf files.
+  statement {
+    effect = "Allow"
+    actions = [
+      "codebuild:BatchGetProjects", "codebuild:ListProjects",
+      "codepipeline:GetPipeline", "codepipeline:GetPipelineState",
+      "codestar-connections:GetConnection", "codestar-connections:ListConnections",
+      "codeconnections:GetConnection", "codeconnections:ListConnections",
+      "s3:GetBucketPolicy", "s3:GetBucketAcl", "s3:GetBucketCORS",
+      "s3:GetBucketWebsite", "s3:GetBucketLogging", "s3:GetLifecycleConfiguration",
+      "s3:GetBucketObjectLockConfiguration", "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketRequestPayment", "s3:GetBucketTagging",
+      "s3:GetReplicationConfiguration", "s3:GetAccelerateConfiguration",
+      "s3:GetBucketNotification",
+      "sns:GetTopicAttributes", "sns:ListSubscriptionsByTopic", "sns:ListTagsForResource",
+      "cloudwatch:DescribeAlarms", "cloudwatch:ListTagsForResource",
     ]
     resources = ["*"]
   }
