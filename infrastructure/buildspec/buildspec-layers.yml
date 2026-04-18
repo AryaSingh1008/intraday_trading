@@ -50,6 +50,7 @@ artifacts:
     - infrastructure/terraform/**/*
     - infrastructure/buildspec/**/*
     - infrastructure/appspec/**/*
+    - frontend/**/*
     - lambdas/**/*
     - backend/**/*
     - prompts/**/*
