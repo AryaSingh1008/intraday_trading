@@ -164,6 +164,93 @@ I built this so he has **one place to look**. Open the dashboard, see every stoc
 
 ---
 
+## 🔄 AWS DevOps Pipeline (v3.0)
+
+The project now uses a fully AWS-native CI/CD pipeline replacing GitHub Actions for deployments.
+
+### Architecture
+
+```
+GitHub (source — stays as-is)
+    │
+    │  git push to main
+    ▼
+AWS CodeStar Connection (GitHub v2 OAuth App)
+    │
+    ├──[infrastructure/** lambdas/** backend/** prompts/**]──▶ trading-infra-pipeline
+    │       Stage 1: Source        (GitHub → ZIP artifact)
+    │       Stage 2: BuildLayers   (CodeBuild: build_layers.sh + zip handlers)
+    │       Stage 3: TerraformPlan (CodeBuild: terraform plan → tfplan artifact)
+    │       Stage 4: Approval      (Manual gate — SNS email to owner)
+    │       Stage 5: TerraformApply(CodeBuild: terraform apply + CodeDeploy trigger)
+    │
+    └──[frontend/**]──────────────────────────────────────▶ trading-frontend-pipeline
+            Stage 1: Source
+            Stage 2: Deploy  (CodeBuild: s3 sync + CloudFront invalidation)
+
+CodeDeploy — Safe Lambda Traffic Shifting
+    trading-lambda-app
+    ├── trading-stocks-signal-dg    → LambdaCanary10Percent5Minutes
+    │     10% traffic to new version → 5 min bake → 100% shift (or auto-rollback)
+    └── trading-options-analysis-dg → LambdaLinear10PercentEvery1Minute
+          +10% traffic every 1 min → full shift in 10 min (or auto-rollback)
+```
+
+### AWS DevOps Services Added
+
+| Service | Resource | Purpose |
+|---------|----------|---------|
+| **CodePipeline** | `trading-infra-pipeline` | 5-stage infra deployment orchestration |
+| **CodePipeline** | `trading-frontend-pipeline` | 2-stage frontend deployment |
+| **CodeBuild** | `trading-build-layers` | Builds Lambda layers + zips all 14 handlers |
+| **CodeBuild** | `trading-terraform-plan` | Runs `terraform plan`, outputs tfplan artifact |
+| **CodeBuild** | `trading-terraform-apply` | Runs `terraform apply` + triggers CodeDeploy |
+| **CodeBuild** | `trading-frontend-deploy` | S3 sync + CloudFront invalidation |
+| **CodeDeploy** | `trading-lambda-app` | Lambda deployment application |
+| **CodeDeploy** | `trading-stocks-signal-dg` | Canary 10%/5min for stocks-signal |
+| **CodeDeploy** | `trading-options-analysis-dg` | Linear 10%/1min for options-analysis |
+| **CodeStar Connections** | `trading-github-connection` | OAuth bridge: GitHub → AWS (no PAT needed) |
+| **SNS** | `trading-pipeline-approvals` | Email approval notification before terraform apply |
+| **SSM Parameter Store** | `/trading/*` | Secure config for CodeBuild (bucket names, IDs) |
+| **CloudWatch Alarms** | `trading-*-errors` | Triggers automatic CodeDeploy rollback on error spike |
+| **Lambda Aliases** | `:live` alias | Traffic shifting target for CodeDeploy on 2 functions |
+| **X-Ray** | All 14 Lambda functions | Distributed tracing — shows exactly where latency comes from |
+
+### How CodeDeploy Traffic Shifting Works
+
+```
+Before deployment:   live alias → v6 (100% traffic)
+
+During canary:       live alias → v6 (90%) + v7 (10%)
+                     ↑ 5-minute bake window
+                     If CloudWatch alarm fires → auto-rollback to v6
+
+After bake:          live alias → v7 (100% traffic)
+```
+
+API Gateway now calls the `:live` alias instead of `$LATEST`, so traffic shifting happens transparently without any API Gateway changes.
+
+### New Files Added
+
+```
+infrastructure/
+├── terraform/
+│   ├── codebuild.tf       ← 4 CodeBuild projects + SSM parameters
+│   ├── codepipeline.tf    ← 2 pipelines, CodeStar connection, SNS, artifact S3
+│   ├── codedeploy.tf      ← CodeDeploy app, deployment groups, Lambda aliases, alarms
+│   └── iam_devops.tf      ← IAM roles for CodePipeline, CodeBuild, CodeDeploy
+├── buildspec/
+│   ├── buildspec-layers.yml           ← Build Lambda layers + zip handlers
+│   ├── buildspec-terraform-plan.yml   ← terraform plan
+│   ├── buildspec-terraform-apply.yml  ← terraform apply + CodeDeploy trigger
+│   └── buildspec-frontend.yml         ← S3 sync + CloudFront invalidation
+└── appspec/
+    ├── appspec-stocks-signal.yml      ← CodeDeploy AppSpec template
+    └── appspec-options-analysis.yml   ← CodeDeploy AppSpec template
+```
+
+---
+
 ## 🚀 Latest Improvements (v2.0)
 
 ### ✅ 15 Critical Enhancements Shipped
@@ -504,6 +591,8 @@ User: "Should I buy RELIANCE today?"
 | **CDN** | CloudFront (Mumbai edge) | HTTP/2+3, caching, S3 origin access identity |
 | **Data** | yfinance, NSE API, 6 RSS feeds — fetched live | 100% free, always-fresh — no caching layer for stock signals |
 | **IaC** | Terraform (10+ modules) | Reproducible, state management, multi-resource orchestration |
+| **CI/CD** | AWS CodePipeline + CodeBuild + CodeDeploy | AWS-native pipeline: build → plan → manual approval → apply → canary deploy |
+| **Tracing** | AWS X-Ray (all 14 Lambdas) | Distributed traces — flame graphs showing where latency comes from |
 | **Scheduling** | EventBridge Scheduler (1 job) | Daily IV history snapshot only — no warmup needed without cache |
 | **NLP** | VADER + 100+ finance lexicon + regex patterns | Free, fast, no API call needed for base sentiment |
 | **Prompts** | YAML templates + Jinja2 (prompt_loader.py) | Versioned, testable, separated from code |
@@ -655,11 +744,23 @@ intraday_trading/
     │   ├── s3.tf                       ← 2 buckets: SPA hosting + Excel exports
     │   ├── cloudfront.tf               ← CDN (Mumbai edge, HTTP/2+3)
     │   ├── iam.tf                      ← Least-privilege IAM roles + policies
+    │   ├── iam_devops.tf               ← IAM roles for CodePipeline, CodeBuild, CodeDeploy
     │   ├── bedrock.tf                  ← Bedrock Agent creation + alias
     │   ├── cloudwatch.tf               ← Log groups + dashboards
+    │   ├── codebuild.tf                ← 4 CodeBuild projects + SSM parameters
+    │   ├── codepipeline.tf             ← 2 pipelines, CodeStar connection, SNS, artifact S3
+    │   ├── codedeploy.tf               ← CodeDeploy app, deployment groups, Lambda aliases, alarms
     │   ├── outputs.tf                  ← Deployed resource URLs
     │   ├── terraform.tfvars            ← Account ID, region (gitignored)
     │   └── terraform.lock.hcl          ← Provider version lock
+    ├── buildspec/
+    │   ├── buildspec-layers.yml        ← CodeBuild: build Lambda layers + zip handlers
+    │   ├── buildspec-terraform-plan.yml← CodeBuild: terraform plan
+    │   ├── buildspec-terraform-apply.yml← CodeBuild: terraform apply + CodeDeploy trigger
+    │   └── buildspec-frontend.yml      ← CodeBuild: S3 sync + CloudFront invalidation
+    ├── appspec/
+    │   ├── appspec-stocks-signal.yml   ← CodeDeploy AppSpec template for stocks-signal
+    │   └── appspec-options-analysis.yml← CodeDeploy AppSpec template for options-analysis
     └── layers/
         ├── build_layers.sh             ← Script to create Lambda layer ZIPs
         └── zips/
@@ -685,7 +786,11 @@ intraday_trading/
 | **EventBridge** | 14M invocations/month | ~10K invocations | **₹0** |
 | **CloudWatch** | 5 GB logs/month | ~2 GB | **₹0** |
 | **Bedrock AI** | — | ~2–5M tokens | **₹150–400** |
-| | | **TOTAL** | **~$17–22/month (~₹1,400–1,800)** |
+| **CodePipeline** | 1 free pipeline/month | 2 pipelines | **~$1** |
+| **CodeBuild** | 100 min free/month | ~10 deploys/month | **~$1.35** |
+| **CodeDeploy (Lambda)** | Always free | — | **₹0** |
+| **X-Ray** | 100K traces free/month | ~50K traces | **₹0** |
+| | | **TOTAL** | **~$19–25/month (~₹1,600–2,100)** |
 
 > **Why Lambda exceeds free tier:** The 60-second market-hours refresh (9:15–3:30 IST) creates ~375 refresh cycles/day during trading hours. Each cycle hits the stock signal Lambda (1 GB RAM, ~20s × 4 pages), pushing monthly GB-seconds to ~1.4M — above the 400K free tier limit.
 
@@ -738,6 +843,51 @@ python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 
 ## 🚀 Deployment (AWS)
 
+### Option A: AWS-Native Pipeline (Recommended — v3.0)
+
+Deployments are now fully automated via **AWS CodePipeline**. Just push to `main`:
+
+```bash
+git push origin main
+```
+
+**What happens automatically:**
+1. CodePipeline detects the push via CodeStar GitHub connection
+2. CodeBuild builds Lambda layers + zips all handlers
+3. CodeBuild runs `terraform plan`
+4. **You get an email** — review the plan and approve/reject
+5. CodeBuild runs `terraform apply`
+6. CodeDeploy shifts traffic to new Lambda versions (canary for stocks-signal, linear for options-analysis)
+
+**One-time setup (first deployment only):**
+```bash
+# 1. Set your Terraform state bucket in SSM
+aws ssm put-parameter --name "/trading/tf-state-bucket" --type "String" --value "YOUR_TF_STATE_BUCKET_NAME" --overwrite
+
+# 2. Apply with local credentials to create the pipeline infrastructure
+cd infrastructure/terraform
+terraform init -backend-config="bucket=YOUR_TF_STATE_BUCKET" -backend-config="key=trading/terraform.tfstate" -backend-config="region=us-east-1"
+terraform plan -var="aws_account_id=$(aws sts get-caller-identity --query Account --output text)" -var="lambda_layers_built=true" -out=tfplan.tmp
+terraform apply tfplan.tmp
+
+# 3. Activate the GitHub connection in AWS console (30 seconds)
+# Go to: https://us-east-1.console.aws.amazon.com/codesuite/settings/connections
+# Find "trading-github-connection" → click "Update pending connection" → authorize GitHub App
+
+# 4. Confirm the SNS approval email
+# Check singh.arya1097@gmail.com for "AWS Notification - Subscription Confirmation" → click the link
+```
+
+**Monitor pipelines:**
+```
+https://us-east-1.console.aws.amazon.com/codesuite/codepipeline/pipelines/trading-infra-pipeline/view
+https://us-east-1.console.aws.amazon.com/codesuite/codepipeline/pipelines/trading-frontend-pipeline/view
+```
+
+---
+
+### Option B: Manual Terraform Deploy (Break-glass / Local)
+
 ```bash
 # 1. Build Lambda layers
 cd infrastructure/layers
@@ -748,7 +898,7 @@ cd ../terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your AWS account ID
 
-# 3. Deploy infrastructure (creates Cognito User Pool + JWT authorizer)
+# 3. Deploy infrastructure
 terraform init
 terraform plan
 terraform apply
@@ -769,15 +919,6 @@ aws s3 cp ../../frontend/index.html s3://$BUCKET/index.html \
 # 6. Invalidate CloudFront cache
 aws cloudfront create-invalidation --distribution-id $DIST --paths "/*"
 ```
-
-> **First-time Cognito deploy:** If your CI/CD role (`github-actions-trading`) was created before Cognito was added, you need to grant it Cognito permissions once manually before Terraform can run:
-> ```bash
-> aws iam put-role-policy \
->   --role-name github-actions-trading \
->   --policy-name trading-cognito-access \
->   --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["cognito-idp:*"],"Resource":"*"}]}'
-> ```
-> After the first `terraform apply`, Terraform manages this policy automatically.
 
 ---
 
@@ -823,3 +964,14 @@ aws cloudfront create-invalidation --distribution-id $DIST --paths "/*"
 - ✅ **Live Data** — Removed 15-min DynamoDB cache; all signals computed fresh on every request
 - ✅ **Cognito Authentication** — Per-user wishlist and portfolio isolation
 - ✅ **CI/CD Pipeline** — GitHub Actions auto-deploys infrastructure and frontend
+
+### v3.0 — AWS-Native DevOps Pipeline
+- ✅ **AWS CodePipeline** — Replaced GitHub Actions with 2 fully managed pipelines (infra + frontend)
+- ✅ **AWS CodeBuild** — 4 build projects: layer build, terraform plan, terraform apply, frontend deploy
+- ✅ **AWS CodeDeploy** — Canary + linear traffic shifting for Lambda with auto-rollback on errors
+- ✅ **Lambda Aliases** — `:live` alias on stocks-signal and options-analysis; API Gateway routes to alias
+- ✅ **CodeStar Connection** — Secure GitHub OAuth integration (no PATs, no secrets to rotate)
+- ✅ **Manual Approval Gate** — SNS email notification before every terraform apply
+- ✅ **Auto-Rollback** — CloudWatch alarms on Lambda error metrics trigger instant CodeDeploy rollback
+- ✅ **AWS X-Ray** — Distributed tracing enabled on all 14 Lambda functions
+- ✅ **SSM Parameter Store** — Secrets (bucket names, distribution IDs) injected into CodeBuild at runtime

@@ -26,6 +26,7 @@ env:
 jobs:
   plan:
     name: Terraform Plan
+    if: false   # Disabled — AWS CodePipeline owns infra deployments now
     runs-on: ubuntu-latest
 
     steps:
@@ -86,6 +87,7 @@ jobs:
 
   apply:
     name: Terraform Apply
+    if: false   # Disabled — AWS CodePipeline owns infra deployments now
     runs-on: ubuntu-latest
     needs: plan
     environment: terraform_apply

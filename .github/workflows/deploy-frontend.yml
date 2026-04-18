@@ -13,6 +13,7 @@ permissions:
 jobs:
   deploy:
     name: Sync Frontend to S3
+    if: false   # Disabled — AWS CodePipeline owns frontend deployments now
     runs-on: ubuntu-latest
 
     steps:
