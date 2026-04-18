@@ -48,6 +48,8 @@ artifacts:
   files:
     - infrastructure/layers/**/*
     - infrastructure/terraform/**/*
+    - infrastructure/buildspec/**/*
+    - infrastructure/appspec/**/*
     - lambdas/**/*
     - backend/**/*
     - prompts/**/*
