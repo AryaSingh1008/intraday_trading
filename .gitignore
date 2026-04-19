@@ -19,6 +19,10 @@ terraform.tfvars.json
 .env.*
 *.env
 
+# Lambda layer ZIPs (built by CI, not committed)
+infrastructure/layers/*.zip
+infrastructure/layers/zips/
+
 # Claude local settings
 .claude/
 
