@@ -55,9 +55,9 @@ resource "aws_sns_topic_subscription" "approval_email" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Infrastructure Pipeline
+# Infrastructure Pipeline (V2)
 # Triggers on pushes to main that touch: infrastructure/**, lambdas/**,
-# backend/**, prompts/** (same paths as the GitHub Actions infra workflow).
+# backend/**, prompts/**
 #
 # Stages:
 #   1. Source      — pull from GitHub via CodeStar
@@ -67,12 +67,34 @@ resource "aws_sns_topic_subscription" "approval_email" {
 #   5. TfApply     — terraform apply + CodeDeploy traffic shift
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_codepipeline" "infra" {
-  name     = "${local.prefix}-infra-pipeline"
-  role_arn = aws_iam_role.codepipeline.arn
+  name           = "${local.prefix}-infra-pipeline"
+  role_arn       = aws_iam_role.codepipeline.arn
+  pipeline_type  = "V2"
+  execution_mode = "QUEUED"
 
   artifact_store {
     location = aws_s3_bucket.pipeline_artifacts.bucket
     type     = "S3"
+  }
+
+  trigger {
+    provider_type = "CodeStarSourceConnection"
+    git_configuration {
+      source_action_name = "GitHub_Source"
+      push {
+        branches {
+          includes = ["main"]
+        }
+        file_paths {
+          includes = [
+            "infrastructure/**",
+            "lambdas/**",
+            "backend/**",
+            "prompts/**",
+          ]
+        }
+      }
+    }
   }
 
   stage {
@@ -90,7 +112,7 @@ resource "aws_codepipeline" "infra" {
         FullRepositoryId     = "AryaSingh1008/intraday_trading"
         BranchName           = "main"
         OutputArtifactFormat = "CODE_ZIP"
-        DetectChanges        = "true"
+        DetectChanges        = "false"
       }
     }
   }
@@ -164,16 +186,33 @@ resource "aws_codepipeline" "infra" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Frontend Pipeline
+# Frontend Pipeline (V2)
 # Triggers on pushes to main that touch: frontend/**
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_codepipeline" "frontend" {
-  name     = "${local.prefix}-frontend-pipeline"
-  role_arn = aws_iam_role.codepipeline.arn
+  name           = "${local.prefix}-frontend-pipeline"
+  role_arn       = aws_iam_role.codepipeline.arn
+  pipeline_type  = "V2"
+  execution_mode = "SUPERSEDED"
 
   artifact_store {
     location = aws_s3_bucket.pipeline_artifacts.bucket
     type     = "S3"
+  }
+
+  trigger {
+    provider_type = "CodeStarSourceConnection"
+    git_configuration {
+      source_action_name = "GitHub_Source"
+      push {
+        branches {
+          includes = ["main"]
+        }
+        file_paths {
+          includes = ["frontend/**"]
+        }
+      }
+    }
   }
 
   stage {
@@ -191,7 +230,7 @@ resource "aws_codepipeline" "frontend" {
         FullRepositoryId     = "AryaSingh1008/intraday_trading"
         BranchName           = "main"
         OutputArtifactFormat = "CODE_ZIP"
-        DetectChanges        = "true"
+        DetectChanges        = "false"
       }
     }
   }
@@ -235,5 +274,4 @@ output "pipeline_artifacts_bucket" {
   value       = aws_s3_bucket.pipeline_artifacts.bucket
   description = "S3 bucket used as CodePipeline artifact store"
   sensitive   = true
-
 }
