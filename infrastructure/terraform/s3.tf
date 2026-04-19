@@ -57,6 +57,7 @@ resource "aws_s3_object" "frontend_html" {
   content_type  = "text/html"
   etag          = filemd5("${local.project_root}/frontend/index.html")
   cache_control = "no-cache, no-store, must-revalidate"
+  lifecycle { ignore_changes = [tags_all] }
 }
 
 resource "aws_s3_object" "frontend_css" {
@@ -66,6 +67,7 @@ resource "aws_s3_object" "frontend_css" {
   content_type  = "text/css"
   etag          = filemd5("${local.project_root}/frontend/css/style.css")
   cache_control = "public, max-age=31536000, immutable"
+  lifecycle { ignore_changes = [tags_all] }
 }
 
 resource "aws_s3_object" "frontend_js" {
@@ -75,6 +77,7 @@ resource "aws_s3_object" "frontend_js" {
   content_type  = "application/javascript"
   etag          = filemd5("${local.project_root}/frontend/js/app.js")
   cache_control = "public, max-age=31536000, immutable"
+  lifecycle { ignore_changes = [tags_all] }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
