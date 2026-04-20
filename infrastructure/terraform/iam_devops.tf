@@ -149,16 +149,6 @@ data "aws_iam_policy_document" "codebuild_permissions" {
     effect    = "Allow"
     actions   = ["iam:PassRole"]
     resources = ["arn:aws:iam::${local.account_id}:role/${local.prefix}-*"]
-    condition {
-      test     = "StringLike"
-      variable = "iam:PassedToService"
-      values = [
-        "lambda.amazonaws.com",
-        "codedeploy.amazonaws.com",
-        "scheduler.amazonaws.com",
-        "bedrock.amazonaws.com",
-      ]
-    }
   }
 
   statement {
@@ -206,7 +196,9 @@ data "aws_iam_policy_document" "codebuild_permissions" {
       "codebuild:BatchGetProjects", "codebuild:ListProjects",
       "codepipeline:GetPipeline", "codepipeline:GetPipelineState",
       "codestar-connections:GetConnection", "codestar-connections:ListConnections",
+      "codestar-connections:PassConnection",
       "codeconnections:GetConnection", "codeconnections:ListConnections",
+      "codeconnections:PassConnection",
       "s3:GetBucketPolicy", "s3:GetBucketAcl", "s3:GetBucketCORS",
       "s3:GetBucketWebsite", "s3:GetBucketLogging", "s3:GetLifecycleConfiguration",
       "s3:GetBucketObjectLockConfiguration", "s3:GetBucketPublicAccessBlock",
