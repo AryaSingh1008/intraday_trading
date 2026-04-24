@@ -1,6 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# IAM: CodePipeline Role
+# DISABLED — CodePipeline IAM. Uncomment when re-enabling CodePipeline.
 # ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
 data "aws_iam_policy_document" "codepipeline_assume" {
   statement {
     effect  = "Allow"
@@ -60,9 +63,14 @@ resource "aws_iam_role_policy" "codepipeline" {
   policy = data.aws_iam_policy_document.codepipeline_permissions.json
 }
 
+*/
+
 # ─────────────────────────────────────────────────────────────────────────────
-# IAM: CodeBuild Role
+# DISABLED — CodeBuild IAM. Uncomment when re-enabling CodeBuild.
 # ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
 data "aws_iam_policy_document" "codebuild_assume" {
   statement {
     effect  = "Allow"
@@ -227,6 +235,8 @@ resource "aws_iam_role_policy_attachment" "codebuild_readonly" {
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
+*/
+
 # X-Ray write access for Lambda functions (used when tracing_config = "Active")
 resource "aws_iam_role_policy_attachment" "lambda_xray" {
   role       = aws_iam_role.lambda_exec.name
@@ -234,8 +244,11 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# IAM: CodeDeploy Role
+# DISABLED — CodeDeploy IAM. Uncomment when re-enabling CodeDeploy.
 # ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
 data "aws_iam_policy_document" "codedeploy_assume" {
   statement {
     effect  = "Allow"
@@ -275,3 +288,5 @@ resource "aws_iam_role_policy" "codedeploy_cloudwatch" {
   role   = aws_iam_role.codedeploy.id
   policy = data.aws_iam_policy_document.codedeploy_cloudwatch.json
 }
+
+*/
