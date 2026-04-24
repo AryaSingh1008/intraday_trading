@@ -45,6 +45,7 @@
         "s3:PutBucketTagging",
         "s3:GetLifecycleConfiguration",
         "s3:PutLifecycleConfiguration",
+        "s3:GetBucketNotification",
         "s3:PutObject",
         "s3:GetObject",
         "s3:DeleteObject",
@@ -57,6 +58,44 @@
         "arn:aws:s3:::trading-frontend-*/*",
         "arn:aws:s3:::trading-exports-*",
         "arn:aws:s3:::trading-exports-*/*"
+      ]
+    },
+    {
+      "Sid": "S3PipelineArtifacts",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketAcl",
+        "s3:GetBucketLocation",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketCORS",
+        "s3:GetBucketWebsite",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketLogging",
+        "s3:GetReplicationConfiguration",
+        "s3:GetBucketTagging",
+        "s3:PutBucketTagging",
+        "s3:GetLifecycleConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:GetBucketNotification",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::trading-pipeline-artifacts-*",
+        "arn:aws:s3:::trading-pipeline-artifacts-*/*"
       ]
     },
     {
@@ -131,58 +170,6 @@
         "cloudwatch:UntagResource"
       ],
       "Resource": "arn:aws:cloudwatch:us-east-1:*:alarm:trading-*"
-    },
-    {
-      "Sid": "S3PipelineArtifacts",
-      "Effect": "Allow",
-      "Action": [
-        "s3:CreateBucket",
-        "s3:DeleteBucket",
-        "s3:GetBucketVersioning",
-        "s3:PutBucketVersioning",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:PutBucketPublicAccessBlock",
-        "s3:GetLifecycleConfiguration",
-        "s3:PutLifecycleConfiguration",
-        "s3:GetBucketTagging",
-        "s3:PutBucketTagging",
-        "s3:GetBucketLocation",
-        "s3:ListBucket",
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::trading-pipeline-artifacts-*",
-        "arn:aws:s3:::trading-pipeline-artifacts-*/*"
-      ]
-    },
-    {
-      "Sid": "DevOpsServicesDestroy",
-      "Effect": "Allow",
-      "Action": [
-        "codepipeline:GetPipeline",
-        "codepipeline:GetPipelineState",
-        "codepipeline:DeletePipeline",
-        "codebuild:BatchGetProjects",
-        "codebuild:DeleteProject",
-        "codedeploy:GetApplication",
-        "codedeploy:DeleteApplication",
-        "codedeploy:GetDeploymentGroup",
-        "codedeploy:DeleteDeploymentGroup",
-        "codestar-connections:GetConnection",
-        "codestar-connections:DeleteConnection",
-        "codeconnections:GetConnection",
-        "ssm:GetParameter",
-        "ssm:GetParameters",
-        "ssm:DeleteParameter",
-        "sns:GetTopicAttributes",
-        "sns:GetSubscriptionAttributes",
-        "sns:DeleteTopic",
-        "sns:Unsubscribe",
-        "sns:ListTagsForResource"
-      ],
-      "Resource": "*"
     },
     {
       "Sid": "DynamoDBManage",
@@ -288,6 +275,116 @@
       "Resource": "*"
     },
     {
+      "Sid": "SSMManage",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:DescribeParameters",
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SNSManage",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:GetSubscriptionAttributes",
+        "sns:ListSubscriptionsByTopic",
+        "sns:TagResource",
+        "sns:UntagResource",
+        "sns:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CodePipelineManage",
+      "Effect": "Allow",
+      "Action": [
+        "codepipeline:CreatePipeline",
+        "codepipeline:UpdatePipeline",
+        "codepipeline:DeletePipeline",
+        "codepipeline:GetPipeline",
+        "codepipeline:GetPipelineState",
+        "codepipeline:GetPipelineExecution",
+        "codepipeline:StartPipelineExecution",
+        "codepipeline:TagResource",
+        "codepipeline:UntagResource",
+        "codepipeline:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CodeBuildManage",
+      "Effect": "Allow",
+      "Action": [
+        "codebuild:CreateProject",
+        "codebuild:UpdateProject",
+        "codebuild:DeleteProject",
+        "codebuild:BatchGetProjects",
+        "codebuild:ListProjects",
+        "codebuild:TagResource",
+        "codebuild:UntagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CodeDeployManage",
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:CreateApplication",
+        "codedeploy:DeleteApplication",
+        "codedeploy:GetApplication",
+        "codedeploy:CreateDeploymentGroup",
+        "codedeploy:UpdateDeploymentGroup",
+        "codedeploy:DeleteDeploymentGroup",
+        "codedeploy:GetDeploymentGroup",
+        "codedeploy:ListDeploymentGroups",
+        "codedeploy:BatchGetDeploymentGroups",
+        "codedeploy:GetDeploymentConfig",
+        "codedeploy:CreateDeployment",
+        "codedeploy:GetDeployment",
+        "codedeploy:RegisterApplicationRevision",
+        "codedeploy:GetApplicationRevision",
+        "codedeploy:TagResource",
+        "codedeploy:UntagResource",
+        "codedeploy:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CodeStarConnectionsManage",
+      "Effect": "Allow",
+      "Action": [
+        "codestar-connections:CreateConnection",
+        "codestar-connections:DeleteConnection",
+        "codestar-connections:GetConnection",
+        "codestar-connections:UseConnection",
+        "codestar-connections:PassConnection",
+        "codestar-connections:TagResource",
+        "codestar-connections:UntagResource",
+        "codestar-connections:ListTagsForResource",
+        "codeconnections:CreateConnection",
+        "codeconnections:DeleteConnection",
+        "codeconnections:GetConnection",
+        "codeconnections:PassConnection",
+        "codeconnections:TagResource",
+        "codeconnections:UntagResource",
+        "codeconnections:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "IAMManageTradingRoles",
       "Effect": "Allow",
       "Action": [
@@ -317,7 +414,10 @@
           "iam:PassedToService": [
             "lambda.amazonaws.com",
             "scheduler.amazonaws.com",
-            "bedrock.amazonaws.com"
+            "bedrock.amazonaws.com",
+            "codepipeline.amazonaws.com",
+            "codebuild.amazonaws.com",
+            "codedeploy.amazonaws.com"
           ]
         }
       }
