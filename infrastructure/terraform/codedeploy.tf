@@ -87,18 +87,22 @@ resource "aws_cloudwatch_metric_alarm" "options_analysis_errors" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CodeDeploy Application (Lambda compute platform)
+# DISABLED — Uncomment to re-enable CodeDeploy canary/linear deployments.
+# Lambda aliases and CloudWatch alarms above are kept active so switching
+# back requires only uncommenting these blocks.
 # ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
+# CodeDeploy Application (Lambda compute platform)
 resource "aws_codedeploy_app" "lambda" {
   name             = "${local.prefix}-lambda-app"
   compute_platform = "Lambda"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Deployment Group: stocks-signal
 # Strategy: Canary — send 10% traffic to new version for 5 minutes before full shift.
 # If the CloudWatch alarm fires during the bake time, CodeDeploy auto-rolls back.
-# ─────────────────────────────────────────────────────────────────────────────
 resource "aws_codedeploy_deployment_group" "stocks_signal" {
   app_name               = aws_codedeploy_app.lambda.name
   deployment_group_name  = "${local.prefix}-stocks-signal-dg"
@@ -121,10 +125,8 @@ resource "aws_codedeploy_deployment_group" "stocks_signal" {
   }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Deployment Group: options-analysis
 # Strategy: Linear — add 10% traffic every 1 minute (full shift in 10 minutes).
-# ─────────────────────────────────────────────────────────────────────────────
 resource "aws_codedeploy_deployment_group" "options_analysis" {
   app_name               = aws_codedeploy_app.lambda.name
   deployment_group_name  = "${local.prefix}-options-analysis-dg"
@@ -146,3 +148,5 @@ resource "aws_codedeploy_deployment_group" "options_analysis" {
     enabled = true
   }
 }
+
+*/

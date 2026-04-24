@@ -1,4 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
+# DISABLED — GitHub Actions owns deployments now.
+# Uncomment to re-enable AWS CodePipeline.
+# ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
+# ─────────────────────────────────────────────────────────────────────────────
 # S3 Artifact Store — shared by both pipelines
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_s3_bucket" "pipeline_artifacts" {
@@ -275,3 +282,5 @@ output "pipeline_artifacts_bucket" {
   description = "S3 bucket used as CodePipeline artifact store"
   sensitive   = true
 }
+
+*/

@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.10.0"
 
   required_providers {
     aws = {
@@ -17,7 +17,9 @@ terraform {
   }
 
   # Backend config is passed via -backend-config flags in CI/CD (no secrets in code)
-  backend "s3" {}
+  backend "s3" {
+    use_lockfile = true
+  }
 }
 
 provider "aws" {

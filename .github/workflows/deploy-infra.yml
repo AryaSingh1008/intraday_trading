@@ -26,7 +26,6 @@ env:
 jobs:
   plan:
     name: Terraform Plan
-    if: false   # Disabled — AWS CodePipeline owns infra deployments now
     runs-on: ubuntu-latest
 
     steps:
@@ -60,7 +59,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.5.7"
+          terraform_version: "1.10.3"
 
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}
@@ -87,7 +86,6 @@ jobs:
 
   apply:
     name: Terraform Apply
-    if: false   # Disabled — AWS CodePipeline owns infra deployments now
     runs-on: ubuntu-latest
     needs: plan
     environment: terraform_apply
@@ -111,7 +109,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.5.7"
+          terraform_version: "1.10.3"
 
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}

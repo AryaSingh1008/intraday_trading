@@ -1,4 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
+# DISABLED — GitHub Actions owns deployments now.
+# Uncomment to re-enable AWS CodeBuild projects and SSM parameters.
+# ─────────────────────────────────────────────────────────────────────────────
+
+/*
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SSM Parameters — injected into buildspecs via parameter-store env vars.
 # Set values once manually after first terraform apply, then ignore_changes
 # prevents Terraform from overwriting them on subsequent applies.
@@ -175,3 +182,5 @@ resource "aws_codebuild_project" "frontend_deploy" {
     }
   }
 }
+
+*/
