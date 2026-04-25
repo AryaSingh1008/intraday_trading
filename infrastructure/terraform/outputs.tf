@@ -1,5 +1,5 @@
 output "cloudfront_url" {
-  description = "CloudFront distribution URL — open this in your browser"
+  description = "CloudFront distribution URL — open this in your browser to access the app"
   value       = "https://${aws_cloudfront_distribution.main.domain_name}"
 }
 
