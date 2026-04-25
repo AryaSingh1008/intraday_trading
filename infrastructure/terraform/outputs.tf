@@ -64,7 +64,7 @@ output "terraform_deployer_secret_key" {
 
 output "lambda_layer_status" {
   description = "Lambda layer deployment status"
-  value       = var.lambda_layers_built ? "✅ Layers deployed" : "⚠️ Run build_layers.sh then set lambda_layers_built=true"
+  value       = var.lambda_layers_built ? "✅ Layers deployed" : " Run build_layers.sh then set lambda_layers_built=true"
 }
 
 output "cognito_user_pool_id" {
